@@ -66,6 +66,16 @@ python3 -m http.server 8080
 
 Then open `http://localhost:8080/lizwi.html`. The application can also be opened from another device on the same network using the host computer’s local IP address.
 
+## Verification
+
+Lizwi includes a lightweight Node-based test suite that does not introduce a framework or build step. Run it from the repository root:
+
+```bash
+node tests/lizwi-hardening.test.mjs
+```
+
+The suite verifies embedded JavaScript and service-worker syntax, valid and invalid sign imports, exact 21-landmark validation, non-finite coordinate rejection, safe handling of script-like labels, fail-closed sign distance, and the presence of camera, microphone, model-fallback, loop, and shutdown safeguards. Browser and physical-device behavior still requires a real permissioned browser session.
+
 ## Current limitations
 
 The prototype is intentionally honest about its scope. Detection quality depends on lighting, camera position, distance, device hardware, and browser support. Hand and posture model loading depends on network access to the model CDN. A browser tab cannot control another application or the operating system’s scroll behavior without a native wrapper or accessibility integration. Personal sign templates recognize only the examples that the user records and are not a substitute for a trained language recognizer.

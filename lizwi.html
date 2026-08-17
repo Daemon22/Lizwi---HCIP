@@ -332,8 +332,11 @@ const logEl = document.getElementById('log');
 const stateColors = {idle:'#8A94A6', present:'#2B6CB0', engaged:'#2F9E5A', control:'#C2760C'};
 let currentState = 'idle';
 let micOn = false;
+let micStream = null;
+let cameraStream = null;
 let micToggleTime = 0;
 let running = false;
+let frameRequest = null;
 
 // hysteresis: a candidate state must hold steady for this long before it commits,
 // so brief flickers (a blink, a half-turn) don't bounce the ladder around
@@ -350,6 +353,7 @@ let postureMode = 'off'; // 'off' | 'real' | 'loading'
 let postureDetector = null;
 let baselineShoulderWidth = null;
 let tfCoreLoaded = false;
+let modelLoadPromise = null;
 
 const bindH = document.getElementById('bindH');
 const bindV = document.getElementById('bindV');
@@ -392,40 +396,100 @@ function setState(s){
   log('state -> ' + s.toUpperCase());
 }
 
+function stopMicrophone(){
+  if(micStream){
+    micStream.getTracks().forEach(track => track.stop());
+    micStream = null;
+  }
+  micOn = false;
+  micBtn.textContent = 'mic: muted';
+  micBtn.classList.remove('active');
+  document.getElementById('tMic').textContent = 'muted';
+}
+
+function stopCamera(){
+  running = false;
+  if(frameRequest !== null){ cancelAnimationFrame(frameRequest); frameRequest = null; }
+  if(bgInterval){ clearInterval(bgInterval); bgInterval = null; }
+  if(cameraStream){
+    cameraStream.getTracks().forEach(track => track.stop());
+    cameraStream = null;
+  }
+  video.pause();
+  video.srcObject = null;
+  startBtn.style.display = 'flex';
+  startBtn.textContent = 'Tap to enable camera';
+  prevFrame = null;
+  turnPrevFrame = null;
+  gestureZoneMotion.prev = null;
+  baselineShoulderWidth = null;
+  faceHistory = [];
+  liveBuffer = [];
+  setState('idle');
+}
+
+function stopResources(){
+  stopMicrophone();
+  stopCamera();
+  if(postureDetector?.dispose) postureDetector.dispose();
+  if(handDetector?.dispose) handDetector.dispose();
+  postureDetector = null;
+  handDetector = null;
+  handMode = 'motion';
+  postureMode = 'off';
+  handBtn.textContent = 'hand: motion-zone';
+  handBtn.classList.remove('active');
+  postureBtn.textContent = 'posture: off';
+  postureBtn.classList.remove('active');
+  document.getElementById('tPosture').textContent = '—';
+  baselineShoulderWidth = null;
+}
+
 startBtn.addEventListener('click', async ()=>{
+  if(cameraStream?.active){ running = true; startBtn.style.display = 'none'; if(frameRequest === null) frameRequest = requestAnimationFrame(loop); return; }
   try{
-    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}, audio:false});
-    video.srcObject = stream;
+    cameraStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}, audio:false});
+    video.srcObject = cameraStream;
+    await video.play().catch(()=>{});
     startBtn.style.display = 'none';
     running = true;
     log('camera enabled' + (hasFaceDetector? ' — using FaceDetector API' : ' — using motion-based presence fallback (FaceDetector unsupported on this browser)'));
-    requestAnimationFrame(loop);
+    if(frameRequest === null) frameRequest = requestAnimationFrame(loop);
   }catch(e){
-    log('camera permission denied or unavailable');
+    cameraStream = null;
+    log('camera permission denied or unavailable — camera remains off');
   }
 });
 
 micBtn.addEventListener('click', async ()=>{
   micToggleTime = Date.now();
   if(!micOn){
-    try{
-      await navigator.mediaDevices.getUserMedia({audio:true});
-      micOn = true;
-      micBtn.textContent = 'mic: live (conversation)';
-      micBtn.classList.add('active');
-      document.getElementById('tMic').textContent = 'live';
-      log('mic enabled — gesture zone paused, treating this as active conversation');
-    }catch(e){ log('mic permission denied'); }
+    if(micStream?.active){ micOn = true; }
+    else {
+      try{
+        micStream = await navigator.mediaDevices.getUserMedia({audio:true});
+        micOn = true;
+      }catch(e){
+        micStream = null;
+        micOn = false;
+        document.getElementById('tMic').textContent = 'unavailable';
+        log('mic permission denied or unavailable — microphone remains muted');
+        return;
+      }
+    }
+    micBtn.textContent = 'mic: live (conversation)';
+    micBtn.classList.add('active');
+    document.getElementById('tMic').textContent = 'live';
+    log('mic enabled — gesture zone paused, treating this as active conversation');
   } else {
-    micOn = false;
-    micBtn.textContent = 'mic: muted';
-    micBtn.classList.remove('active');
-    document.getElementById('tMic').textContent = 'muted';
-    log('mic muted — gesture zone available again');
+    stopMicrophone();
+    log('mic muted — microphone tracks stopped; gesture zone available again');
   }
 });
 
-resetBtn.addEventListener('click', ()=>{ logEl.innerHTML=''; });
+resetBtn.addEventListener('click', ()=>{ stopResources(); logEl.replaceChildren(); log('resources reset — camera and microphone are off'); });
+window.addEventListener('pagehide', stopResources);
+window.addEventListener('beforeunload', stopResources);
 
 const handBtn = document.getElementById('handBtn');
 handBtn.addEventListener('click', async ()=>{
@@ -495,7 +559,9 @@ async function ensureTfCore(){
 }
 
 async function loadHandTracking(){
-  try{
+  if(modelLoadPromise) return modelLoadPromise;
+  modelLoadPromise = (async ()=>{
+   try{
     await ensureTfCore();
     await withTimeout(loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js'), 6000);
     await withTimeout(loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/hand-pose-detection'), 6000);
@@ -505,10 +571,13 @@ async function loadHandTracking(){
       solutionPath:'https://cdn.jsdelivr.net/npm/@mediapipe/hands'
     }), 8000);
     return true;
-  }catch(e){
+   }catch(e){
     handDetector = null;
+    log('hand model failed to load; explicit fallback is motion-zone mode');
     return false;
-  }
+   } finally { modelLoadPromise = null; }
+  })();
+  return modelLoadPromise;
 }
 
 async function loadPostureTracking(){
@@ -576,6 +645,8 @@ async function detectFace(){
     const faces = await faceDetector.detect(video);
     if(faces.length === 0) return null;
     const b = faces[0].boundingBox;
+    const values = [b.x,b.y,b.width,b.height,video.videoWidth,video.videoHeight];
+    if(!values.every(Number.isFinite) || b.width <= 0 || b.height <= 0) return null;
     return {x:b.x, y:b.y, w:b.width, h:b.height, cx:b.x+b.width/2, cy:b.y+b.height/2, vw:video.videoWidth, vh:video.videoHeight};
   }catch(e){ return null; }
 }
@@ -646,10 +717,10 @@ function updateTurnTaking(engaged, handsResult){
   if(handMode === 'real' && handsResult && handsResult.length){
     const wrist = handsResult[0].keypoints[0];
     if(turnPrevWrist){
-      const d = Math.hypot(wrist.x - turnPrevWrist.x, wrist.y - turnPrevWrist.y);
+      const d = Number.isFinite(wrist.x) && Number.isFinite(wrist.y) && Number.isFinite(turnPrevWrist.x) && Number.isFinite(turnPrevWrist.y) ? Math.hypot(wrist.x - turnPrevWrist.x, wrist.y - turnPrevWrist.y) : 0;
       if(d > 5) active = true;
     }
-    turnPrevWrist = {x:wrist.x, y:wrist.y};
+    turnPrevWrist = Number.isFinite(wrist.x) && Number.isFinite(wrist.y) ? {x:wrist.x, y:wrist.y} : null;
   } else {
     turnPrevWrist = null;
   }
@@ -707,10 +778,11 @@ const SIGN_SAMPLE_MS = 130;
 const SIGN_SAMPLES = 14;
 
 function normalizeHand(keypoints){
-  const wrist = keypoints[0];
-  const midMcp = keypoints[9] || keypoints[wrist === keypoints[0] ? 9 : 9];
+  if(!Array.isArray(keypoints) || keypoints.length !== 21 || !keypoints.every(k => Number.isFinite(k?.x) && Number.isFinite(k?.y))) return null;
+  const wrist = keypoints[0], midMcp = keypoints[9];
   const scale = Math.max(1, Math.hypot(midMcp.x - wrist.x, midMcp.y - wrist.y));
-  return keypoints.map(k => ({x:(k.x - wrist.x)/scale, y:(k.y - wrist.y)/scale}));
+  const normalized = keypoints.map(k => ({x:(k.x - wrist.x)/scale, y:(k.y - wrist.y)/scale}));
+  return isValidSequence([normalized]) ? normalized : null;
 }
 
 function resample(seq, n){
@@ -723,7 +795,25 @@ function resample(seq, n){
   return out;
 }
 
+function isFiniteLandmark(k){ return k && Number.isFinite(k.x) && Number.isFinite(k.y); }
+function isValidSequence(seq){
+  return Array.isArray(seq) && seq.length > 0 && seq.every(frame => Array.isArray(frame) && frame.length === 21 && frame.every(isFiniteLandmark));
+}
+function validateImportedSigns(data){
+  if(!Array.isArray(data)) return {ok:false, error:'root must be an array of signs'};
+  const normalized = [];
+  for(let i=0;i<data.length;i++){
+    const sign = data[i];
+    if(!sign || typeof sign !== 'object' || typeof sign.label !== 'string' || !sign.label.trim()) return {ok:false, error:`sign ${i+1} has an invalid label`};
+    if(typeof sign.standard !== 'boolean') return {ok:false, error:`sign ${i+1} has an invalid standard flag`};
+    if(!Array.isArray(sign.sequences) || sign.sequences.length === 0 || !sign.sequences.every(isValidSequence)) return {ok:false, error:`sign ${i+1} has invalid landmark sequences`};
+    normalized.push({label:sign.label.trim(), standard:sign.standard, sequences:sign.sequences.map(seq => seq.map(frame => frame.map(k => ({x:Number(k.x), y:Number(k.y)}))))});
+  }
+  return {ok:true, value:normalized};
+}
+
 function seqDistance(a, b){
+  if(!isValidSequence(a) || !isValidSequence(b)) return Infinity;
   const ra = resample(a, SIGN_SAMPLES), rb = resample(b, SIGN_SAMPLES);
   let total = 0, count = 0;
   for(let i=0;i<SIGN_SAMPLES;i++){
@@ -737,22 +827,19 @@ function seqDistance(a, b){
 
 function renderSignList(){
   const el = document.getElementById('signList');
-  el.innerHTML = '';
+  el.replaceChildren();
   if(signTemplates.length === 0){
-    el.innerHTML = '<div class="row" style="border:none;"><span>no signs recorded yet</span><span></span></div>';
-    return;
+    const row = document.createElement('div'); row.className = 'row'; row.style.border = 'none';
+    const empty = document.createElement('span'); empty.textContent = 'no signs recorded yet';
+    row.append(empty, document.createElement('span')); el.appendChild(row); return;
   }
   signTemplates.forEach((t, i)=>{
-    const row = document.createElement('div');
-    row.className = 'row';
-    const tag = t.standard ? ' [standard]' : ' [personal]';
-    row.innerHTML = `<span>${t.label}${tag}</span><span>${t.sequences.length} example(s) &nbsp; <a href="#" data-i="${i}" style="color:var(--control);">delete</a></span>`;
-    row.querySelector('a').addEventListener('click', (e)=>{
-      e.preventDefault();
-      signTemplates.splice(i,1);
-      renderSignList();
-    });
-    el.appendChild(row);
+    const row = document.createElement('div'); row.className = 'row';
+    const label = document.createElement('span'); label.textContent = t.label + (t.standard ? ' [standard]' : ' [personal]');
+    const details = document.createElement('span'); details.textContent = `${t.sequences.length} example(s) `;
+    const link = document.createElement('a'); link.href = '#'; link.textContent = 'delete'; link.style.color = 'var(--control)';
+    link.addEventListener('click', (e)=>{ e.preventDefault(); signTemplates.splice(i,1); renderSignList(); });
+    details.append(' ', link); row.append(label, details); el.appendChild(row);
   });
 }
 renderSignList();
@@ -764,9 +851,10 @@ const voiceSelect = document.getElementById('voiceSelect');
 const rateSlider = document.getElementById('rateSlider');
 
 function populateVoices(){
+  if(!('speechSynthesis' in window)) return;
   voiceList = speechSynthesis.getVoices();
   if(voiceList.length === 0) return;
-  voiceSelect.innerHTML = '';
+  voiceSelect.replaceChildren();
   voiceList.forEach((v,i)=>{
     const opt = document.createElement('option');
     opt.value = i;
@@ -825,7 +913,7 @@ recordSignBtn.addEventListener('click', async ()=>{
   while(Date.now() - start < SIGN_SAMPLE_MS * SIGN_SAMPLES){
     try{
       const hands = await handDetector.estimateHands(video, {flipHorizontal:false});
-      if(hands.length) frames.push(normalizeHand(hands[0].keypoints));
+      if(hands.length){ const normalized = normalizeHand(hands[0].keypoints); if(normalized) frames.push(normalized); }
     }catch(e){}
     await new Promise(r=>setTimeout(r, SIGN_SAMPLE_MS));
   }
@@ -868,14 +956,18 @@ document.getElementById('importFile').addEventListener('change', (e)=>{
   reader.onload = ()=>{
     try{
       const imported = JSON.parse(reader.result);
-      imported.forEach(t=>{
-        const existing = signTemplates.find(s=>s.label===t.label);
+      const result = validateImportedSigns(imported);
+      if(!result.ok){ log('import rejected — ' + result.error); return; }
+      const next = signTemplates.map(s => ({...s, sequences:[...s.sequences]}));
+      result.value.forEach(t=>{
+        const existing = next.find(s=>s.label===t.label);
         if(existing) existing.sequences.push(...t.sequences);
-        else signTemplates.push(t);
+        else next.push(t);
       });
+      signTemplates = next;
       renderSignList();
-      log('imported signs from file');
-    }catch(err){ log('could not read that file — expected a JSON export from this app'); }
+      log('imported ' + result.value.length + ' validated sign(s) from file');
+    }catch(err){ log('could not read that file — malformed JSON'); }
   };
   reader.readAsText(file);
 });
@@ -892,8 +984,9 @@ function processSignTranscription(handsResult, engaged){
   lastSignSampleAt = Date.now();
 
   if(handsResult && handsResult.length){
-    liveBuffer.push(normalizeHand(handsResult[0].keypoints));
-    if(liveBuffer.length > SIGN_SAMPLES) liveBuffer.shift();
+    const normalized = normalizeHand(handsResult[0].keypoints);
+    if(normalized) { liveBuffer.push(normalized); if(liveBuffer.length > SIGN_SAMPLES) liveBuffer.shift(); }
+    else { liveBuffer = []; lastMatchLabel = null; }
   }
 
   if(liveBuffer.length < SIGN_SAMPLES || signTemplates.length === 0) return;
@@ -924,12 +1017,12 @@ function processSignTranscription(handsResult, engaged){
 
 let lastTick = 0;
 async function loop(ts){
-  if(!running) return;
+  if(!running){ frameRequest = null; return; }
   if(ts - lastTick > 120){
     lastTick = ts;
-    await tick();
+    try{ await tick(); }catch(e){ log('sensing cycle recovered from an unexpected error'); }
   }
-  requestAnimationFrame(loop);
+  frameRequest = requestAnimationFrame(loop);
 }
 
 // requestAnimationFrame pauses entirely when this tab is hidden — that's the
@@ -941,7 +1034,7 @@ let bgInterval = null;
 document.addEventListener('visibilitychange', ()=>{
   if(document.hidden){
     if(running && !bgInterval){
-      bgInterval = setInterval(()=>{ if(running) tick(); }, 1000);
+      bgInterval = setInterval(()=>{ if(running) tick().catch(()=>log('background sensing cycle recovered from an error')); }, 1000);
       log('tab backgrounded — sensing continues at ~1x/sec until you switch tabs back or leave the app entirely');
     }
   } else if(bgInterval){
@@ -1065,8 +1158,10 @@ async function tick(){
         if(kp.left_shoulder && kp.right_shoulder && kp.left_shoulder.score > 0.3 && kp.right_shoulder.score > 0.3){
           const tilt = kp.left_shoulder.y - kp.right_shoulder.y;
           const width = Math.abs(kp.left_shoulder.x - kp.right_shoulder.x);
-          if(!baselineShoulderWidth) baselineShoulderWidth = width;
-          const ratio = width / baselineShoulderWidth;
+          if(Number.isFinite(width) && width > 0){
+            if(!baselineShoulderWidth) baselineShoulderWidth = width;
+          }
+          const ratio = baselineShoulderWidth ? width / baselineShoulderWidth : 1;
           notes.push(Math.abs(tilt) > 15 ? (tilt > 0 ? 'leaning right' : 'leaning left') : 'level');
           if(ratio > 1.15) notes.push('closer than baseline');
           else if(ratio < 0.85) notes.push('turned away / farther');
@@ -1075,9 +1170,15 @@ async function tick(){
         if(kp.right_wrist && kp.right_shoulder && kp.right_wrist.score > 0.3 && kp.right_wrist.y < kp.right_shoulder.y) notes.push('right arm raised');
         document.getElementById('tPosture').textContent = notes.length ? notes.join(', ') : 'tracking…';
       } else {
+        baselineShoulderWidth = null;
         document.getElementById('tPosture').textContent = 'no pose detected';
       }
-    }catch(e){ /* estimation hiccup, skip this frame */ }
+    }catch(e){
+      baselineShoulderWidth = null;
+      document.getElementById('tPosture').textContent = 'tracking unavailable';
+    }
+  } else if(postureMode === 'real') {
+    baselineShoulderWidth = null;
   }
 
   // gesture processing only when armed — real skeleton tracking if loaded, else motion-zone
