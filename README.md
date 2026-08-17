@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icons/lizwi-logo.png" alt="Lizwi — Human Communication Intelligence Platform" width="720">
+</p>
+
 # Lizwi
 
 ## Human Communication Intelligence Platform
