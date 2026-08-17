@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lizwi — Human Communication Intelligence Platform</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0B6B5B">
+<link rel="icon" href="icons/lizwi-icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#DDE1E3;
+    --panel:#F5F6F7;
+    --ink:#14181C;
+    --muted:#5B6770;
+    --line:#C3C9CE;
+    --idle:#8A94A6;
+    --present:#2B6CB0;
+    --engaged:#2F9E5A;
+    --control:#C2760C;
+    --state-color: var(--idle);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+    min-height:100vh;
+    padding:24px;
+  }
+  .wrap{max-width:1040px;margin:0 auto;}
+  header{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    margin-bottom:18px;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:12px;
+  }
+  h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:22px;
+    letter-spacing:-0.01em;
+    margin:0;
+  }
+  .sub{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+  }
+  .grid{
+    display:grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap:16px;
+  }
+  @media (max-width:820px){ .grid{grid-template-columns:1fr;} }
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:14px;
+  }
+  .panel h2{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:0.1em;
+    color:var(--muted);
+    margin:0 0 10px 0;
+  }
+  .video-frame{position:relative;background:#0d0f11;border-radius:3px;overflow:hidden;aspect-ratio:4/3;}
+  video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block;}
+  canvas.overlay{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);}
+  .startbtn{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(13,15,17,0.85);color:#fff;border:none;font-family:'Space Grotesk';
+    font-size:14px;cursor:pointer;letter-spacing:0.02em;
+  }
+  .controls{display:flex;gap:8px;margin-top:10px;}
+  button.pill{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;
+    border:1px solid var(--ink);background:#fff;color:var(--ink);
+    border-radius:20px;padding:6px 12px;cursor:pointer;
+  }
+  button.pill.active{background:var(--ink);color:#fff;}
+  .ladder{display:flex;flex-direction:column-reverse;gap:6px;margin:12px 0;}
+  .rung{
+    display:flex;align-items:center;gap:10px;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);
+    padding:6px 8px;border:1px solid var(--line);border-radius:3px;background:#fff;
+    transition:all .2s ease;
+  }
+  .rung .dot{width:8px;height:8px;border-radius:50%;background:var(--line);flex-shrink:0;}
+  .rung.lit{color:#fff;border-color:transparent;}
+  .rung.lit .dot{background:#fff;}
+  .telemetry{font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.9;color:var(--ink);}
+  .telemetry .row{display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding:3px 0;}
+  .telemetry .row span:last-child{color:var(--muted);}
+  .log{
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);
+    height:120px;overflow-y:auto;border-top:1px solid var(--line);margin-top:10px;padding-top:8px;
+  }
+  .log div{margin-bottom:3px;}
+  .gallery{display:flex;gap:8px;margin-top:8px;overflow:hidden;}
+  .card{
+    flex:1;aspect-ratio:1/1;border-radius:3px;display:flex;align-items:center;justify-content:center;
+    font-family:'Space Grotesk';font-size:20px;color:#fff;opacity:0.25;transform:scale(0.9);
+    transition:all .25s ease;border:1px solid rgba(0,0,0,0.1);
+  }
+  .card.active{opacity:1;transform:scale(1.05);box-shadow:0 4px 14px rgba(0,0,0,0.15);}
+  .list{
+    margin-top:8px;height:130px;overflow-y:auto;border:1px solid var(--line);border-radius:3px;background:#fff;
+  }
+  .list div{padding:7px 10px;font-family:'IBM Plex Mono',monospace;font-size:11px;border-bottom:1px solid var(--line);}
+  .list div:last-child{border-bottom:none;}
+  .telemetry select{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink);
+    border:1px solid var(--line);border-radius:3px;background:#fff;padding:3px 6px;
+  }
+  .note{font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5;}
+  .zone-label{position:absolute;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#fff;background:rgba(0,0,0,0.5);padding:2px 5px;border-radius:2px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div style="display:flex;align-items:center;gap:12px;"><img src="icons/lizwi-logo.png" alt="Lizwi logo" style="width:56px;height:38px;object-fit:cover;object-position:left center;border-radius:3px;"><div><h1>Lizwi</h1><div class="sub">Human Communication Intelligence Platform</div></div></div>
+    <div class="sub" id="modeLabel">mode: idle</div>
+  </header>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Sensory Layer — Camera / Recognition Zone</h2>
+      <div class="video-frame" id="videoFrame">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas class="overlay" id="overlay"></canvas>
+        <div class="zone-label" id="distHint" style="top:10px; left:10px; display:none;">too far for control — move closer</div>
+        <button class="startbtn" id="startBtn">Tap to enable camera</button>
+      </div>
+      <div class="controls">
+        <button class="pill" id="micBtn">mic: muted</button>
+        <button class="pill" id="handBtn">hand: motion-zone</button>
+        <button class="pill" id="postureBtn">posture: off</button>
+        <button class="pill" id="resetBtn">reset log</button>
+      </div>
+      <div class="note">
+        The system looks for a person first (face presence), then whether they're
+        oriented toward the camera (engaged), and only then arms the hand-gesture zone
+        on the right side of frame. Microphone stays muted by default — turning it on
+        signals "active conversation" and pauses gesture control, so a chat with someone
+        next to you won't be read as scroll commands. "Hand: motion-zone" is a lightweight
+        stand-in gesture sensor with no external dependencies. Tapping it tries to load a real
+        21-point hand-skeleton model instead — that needs to fetch model files from a CDN, so
+        it only works when this file is opened directly in your own browser (not inside this
+        chat's sandboxed preview), and it falls back automatically if it can't load.
+        "Posture" adds a body sensor — shoulder lean, which arm is raised, whether you're
+        turned toward or away — plain geometry, same CDN caveat as hand tracking. This
+        deliberately does not attempt to read emotion from your face: that's not reliable
+        science, and for a tool meant to speak for you, a wrong guess about how you feel is
+        worse than no guess. If you want the system to communicate a feeling, teach it as a
+        sign below — "frustrated," "tired," whatever you want said — so it's always your word
+        for it, not the software's.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Understanding Layer — State</h2>
+      <div class="ladder" id="ladder">
+        <div class="rung" data-state="control"><span class="dot"></span>CONTROL — gesture armed</div>
+        <div class="rung" data-state="engaged"><span class="dot"></span>ENGAGED — facing camera</div>
+        <div class="rung" data-state="present"><span class="dot"></span>PRESENT — person detected</div>
+        <div class="rung" data-state="idle"><span class="dot"></span>IDLE — no one in frame</div>
+      </div>
+      <div class="telemetry" id="telemetry">
+        <div class="row"><span>face</span><span id="tFace">—</span></div>
+        <div class="row"><span>distance (bbox)</span><span id="tDist">—</span></div>
+        <div class="row"><span>orientation</span><span id="tOrient">—</span></div>
+        <div class="row"><span>nod / shake</span><span id="tNod">—</span></div>
+        <div class="row"><span>posture</span><span id="tPosture">—</span></div>
+        <div class="row"><span>gesture sensitivity</span><span id="tSens">—</span></div>
+        <div class="row"><span>gesture vector</span><span id="tVec">—</span></div>
+        <div class="row"><span>mic</span><span id="tMic">muted</span></div>
+      </div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px;">
+    <h2>Communication Layer — Bindings</h2>
+    <div class="telemetry" style="display:flex; flex-direction:column; gap:8px;">
+      <div class="row" style="border:none;"><span>swipe horizontal →</span>
+        <select id="bindH">
+          <option value="picture">change picture</option>
+          <option value="scroll">scroll list</option>
+          <option value="none">do nothing</option>
+        </select>
+      </div>
+      <div class="row" style="border:none;"><span>swipe vertical →</span>
+        <select id="bindV">
+          <option value="scroll">scroll list</option>
+          <option value="picture">change picture</option>
+          <option value="none">do nothing</option>
+        </select>
+      </div>
+      <div class="row" style="border:none;"><span>nod →</span>
+        <select id="bindNod">
+          <option value="flash">flash acknowledgement</option>
+          <option value="picture">advance picture</option>
+          <option value="none">do nothing</option>
+        </select>
+      </div>
+      <div class="row" style="border:none;"><span>shake →</span>
+        <select id="bindShake">
+          <option value="flash">flash acknowledgement</option>
+          <option value="picture">go back a picture</option>
+          <option value="none">do nothing</option>
+        </select>
+      </div>
+    </div>
+    <div class="note">These four dropdowns are the whole action layer. Everything above them
+      (presence, engagement, distance, mic gating, hysteresis) only decides <em>whether</em>
+      a signal is allowed through; what that signal then does is entirely up to what you pick
+      here. Wiring these outputs to your phone's actual scroll, camera roll, or another app is
+      the part I can't do from inside a browser tab — that needs a native app or an accessibility-
+      service integration on the device itself.</div>
+  </div>
+
+  <div class="panel" style="margin-top:16px;">
+    <h2>Understanding Layer — Conversational Engagement</h2>
+    <div class="note" style="margin-top:0;">
+      This is for whatever's on the other end of a conversation — a person, or
+      an AI — deciding when it's actually their turn to respond. A fixed
+      "wait N seconds of silence" timer is a bad model for anyone signing or
+      gesturing: a real pause while searching for the next sign looks
+      identical to being finished. This instead watches whether the hands are
+      still active, and treats stillness right after a burst of motion as
+      "probably still thinking," not "done" — the grace period adapts instead
+      of being one fixed number for everyone.
+    </div>
+    <div class="ladder" id="turnLadder" style="flex-direction:row; margin-top:10px;">
+      <div class="rung" data-turn="expressing" style="flex:1; text-align:center; justify-content:center;">EXPRESSING</div>
+      <div class="rung" data-turn="pausing" style="flex:1; text-align:center; justify-content:center;">PAUSING</div>
+      <div class="rung" data-turn="complete" style="flex:1; text-align:center; justify-content:center;">TURN COMPLETE</div>
+    </div>
+    <div class="note" style="margin-top:8px;">
+      Fires a real browser event (<code>lizwi:turn</code>) with the
+      current state on every change — anything hosting this page (a chat
+      widget, an AI conversational agent) can listen for that instead of
+      guessing from silence alone. This needs either hand-skeleton tracking
+      or motion-zone activity to have something to watch — it's inferring
+      from hand movement, not audio.
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px;">
+    <h2>Communication Layer — Sign Trainer & Transcriber</h2>
+    <div class="note" style="margin-top:0;">
+      This doesn't know any sign language out of the box — nobody could
+      responsibly claim that from a browser tab. What it does is <em>learn
+      signs you teach it</em>: you show it a sign a few times under a label,
+      it remembers the shape and motion of your hand, and from then on it
+      recognizes that sign live and adds it to a running transcript. That
+      makes it a personal sign-to-text tool that grows with you, not a
+      general ASL/BSL translator — the vocabulary is exactly what you put in.
+      Requires real hand-skeleton tracking (the "hand" button above) to be
+      active first, since this needs actual finger positions, not just motion.
+      Labels aren't limited to words for objects or actions — you can just as
+      well train a sign for "frustrated," "tired," or "I need a break." The
+      system will never guess how you feel from your face; this is how you
+      tell it, on your terms, in your own words. The "standard vocabulary"
+      checkbox tags a sign as one meant to be the same for everyone — a real
+      shared sign language recognizer needs proper training on a real
+      dataset from many signers, which is a separate, much bigger project
+      than this app. What this checkbox does honestly is keep your exports
+      organized by intent from day one — personal shorthand kept separate
+      from anything meant to become standardized later — rather than pretend
+      that distinction doesn't matter until it's too late to untangle.
+    </div>
+    <div class="controls" style="margin-top:10px; flex-wrap:wrap;">
+      <input id="signLabel" type="text" placeholder="label, e.g. 'yes'" style="font-family:'IBM Plex Mono',monospace; font-size:11px; padding:6px 10px; border:1px solid var(--ink); border-radius:20px; flex:1; min-width:120px;">
+      <label style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted); display:flex; align-items:center; gap:5px;">
+        <input type="checkbox" id="signStandard"> standard vocabulary
+      </label>
+      <button class="pill" id="recordSignBtn">record sign (2s)</button>
+      <button class="pill" id="transcribeBtn">transcribe: off</button>
+      <button class="pill" id="exportBtn">export signs</button>
+      <button class="pill" id="importBtn">import signs</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none;">
+    </div>
+    <div id="signList" class="telemetry" style="margin-top:10px;"></div>
+    <div class="note" style="margin-top:10px; margin-bottom:4px;">Transcript</div>
+    <div class="list" id="transcript" style="height:110px;"></div>
+
+    <div class="note" style="margin-top:14px; margin-bottom:6px;">Speech output — turns the transcript into audible speech</div>
+    <div class="controls" style="flex-wrap:wrap;">
+      <button class="pill" id="speakToggle">speak recognized signs: off</button>
+      <select id="voiceSelect" style="font-family:'IBM Plex Mono',monospace; font-size:11px; border:1px solid var(--line); border-radius:3px; padding:4px 6px;"></select>
+      <label style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted); display:flex; align-items:center; gap:6px;">
+        rate <input type="range" id="rateSlider" min="0.6" max="1.6" step="0.1" value="1">
+      </label>
+    </div>
+    <div class="controls" style="margin-top:8px;">
+      <input id="speakText" type="text" placeholder="type anything to speak it directly" style="font-family:'IBM Plex Mono',monospace; font-size:11px; padding:6px 10px; border:1px solid var(--ink); border-radius:20px; flex:1; min-width:160px;">
+      <button class="pill" id="speakNowBtn">speak</button>
+    </div>
+    <div class="note">This works whether or not the camera can see anything — useful as a fallback when a sign isn't recognized, or on its own as a straightforward type-and-speak tool.</div>
+  </div>
+
+  <div class="panel" style="margin-top:16px;">
+    <h2>Demo payload — driven by gesture, not touch</h2>
+    <div class="gallery" id="gallery"></div>
+    <div class="list" id="list"></div>
+    <div class="note">Swipe left/right or up/down in the gesture zone — which does what is set by the bindings above. Requires CONTROL state — i.e. you're recognized, facing the screen, and mic is muted.</div>
+  </div>
+</div>
+
+<script>
+const video = document.getElementById('video');
+const overlay = document.getElementById('overlay');
+const ctx = overlay.getContext('2d');
+const startBtn = document.getElementById('startBtn');
+const micBtn = document.getElementById('micBtn');
+const resetBtn = document.getElementById('resetBtn');
+const modeLabel = document.getElementById('modeLabel');
+const logEl = document.getElementById('log');
+
+const stateColors = {idle:'#8A94A6', present:'#2B6CB0', engaged:'#2F9E5A', control:'#C2760C'};
+let currentState = 'idle';
+let micOn = false;
+let micToggleTime = 0;
+let running = false;
+
+// hysteresis: a candidate state must hold steady for this long before it commits,
+// so brief flickers (a blink, a half-turn) don't bounce the ladder around
+let pendingState = 'idle';
+let pendingSince = 0;
+const HOLD_MS = 350;
+const MIC_GRACE_MS = 800; // ignore gesture arming right after a mic toggle (avoids the tap itself reading as a swipe)
+
+let handMode = 'motion'; // 'motion' | 'real' | 'loading'
+let handDetector = null;
+let prevHandPoint = null;
+
+let postureMode = 'off'; // 'off' | 'real' | 'loading'
+let postureDetector = null;
+let baselineShoulderWidth = null;
+let tfCoreLoaded = false;
+
+const bindH = document.getElementById('bindH');
+const bindV = document.getElementById('bindV');
+const bindNod = document.getElementById('bindNod');
+const bindShake = document.getElementById('bindShake');
+
+// off-screen low-res buffers for motion analysis
+const work = document.createElement('canvas'); work.width = 160; work.height = 120;
+const wctx = work.getContext('2d', {willReadFrequently:true});
+let prevFrame = null;
+
+// face detection support
+const hasFaceDetector = 'FaceDetector' in window;
+let faceDetector = hasFaceDetector ? new FaceDetector({fastMode:true, maxDetectedFaces:1}) : null;
+
+let faceHistory = []; // {t, cx, cy}
+let lastNodTime = 0;
+let lastShakeTime = 0;
+let lastGestureTime = 0;
+let lastSizeRatio = 0.15; // running estimate of face size, used as a distance proxy for adaptive sensitivity
+
+function log(msg){
+  const t = new Date().toLocaleTimeString();
+  const d = document.createElement('div');
+  d.textContent = `[${t}] ${msg}`;
+  logEl.prepend(d);
+  while(logEl.children.length > 40) logEl.removeChild(logEl.lastChild);
+}
+
+function setState(s){
+  if(s === currentState) return;
+  currentState = s;
+  document.documentElement.style.setProperty('--state-color', stateColors[s]);
+  modeLabel.textContent = 'mode: ' + s;
+  document.querySelectorAll('.rung').forEach(r=>{
+    const lit = r.dataset.state === s;
+    r.classList.toggle('lit', lit);
+    if(lit) r.style.background = stateColors[s];
+  });
+  log('state -> ' + s.toUpperCase());
+}
+
+startBtn.addEventListener('click', async ()=>{
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}, audio:false});
+    video.srcObject = stream;
+    startBtn.style.display = 'none';
+    running = true;
+    log('camera enabled' + (hasFaceDetector? ' — using FaceDetector API' : ' — using motion-based presence fallback (FaceDetector unsupported on this browser)'));
+    requestAnimationFrame(loop);
+  }catch(e){
+    log('camera permission denied or unavailable');
+  }
+});
+
+micBtn.addEventListener('click', async ()=>{
+  micToggleTime = Date.now();
+  if(!micOn){
+    try{
+      await navigator.mediaDevices.getUserMedia({audio:true});
+      micOn = true;
+      micBtn.textContent = 'mic: live (conversation)';
+      micBtn.classList.add('active');
+      document.getElementById('tMic').textContent = 'live';
+      log('mic enabled — gesture zone paused, treating this as active conversation');
+    }catch(e){ log('mic permission denied'); }
+  } else {
+    micOn = false;
+    micBtn.textContent = 'mic: muted';
+    micBtn.classList.remove('active');
+    document.getElementById('tMic').textContent = 'muted';
+    log('mic muted — gesture zone available again');
+  }
+});
+
+resetBtn.addEventListener('click', ()=>{ logEl.innerHTML=''; });
+
+const handBtn = document.getElementById('handBtn');
+handBtn.addEventListener('click', async ()=>{
+  if(handMode === 'motion'){
+    handMode = 'loading';
+    handBtn.textContent = 'hand: loading model…';
+    log('attempting to load real hand-skeleton tracking (needs external CDN access)');
+    const ok = await loadHandTracking();
+    if(ok){
+      handMode = 'real';
+      handBtn.textContent = 'hand: skeleton tracking';
+      handBtn.classList.add('active');
+      log('real hand tracking active — 21-point skeleton');
+    } else {
+      handMode = 'motion';
+      handBtn.textContent = 'hand: motion-zone';
+      log('could not load hand-skeleton model (likely blocked in this preview) — staying on motion-zone');
+    }
+  } else {
+    handMode = 'motion';
+    handBtn.textContent = 'hand: motion-zone';
+    handBtn.classList.remove('active');
+    log('switched back to motion-zone gesture sensing');
+  }
+});
+
+const postureBtn = document.getElementById('postureBtn');
+postureBtn.addEventListener('click', async ()=>{
+  if(postureMode === 'off'){
+    postureMode = 'loading';
+    postureBtn.textContent = 'posture: loading model…';
+    log('attempting to load body-pose tracking (needs external CDN access)');
+    const ok = await loadPostureTracking();
+    if(ok){
+      postureMode = 'real';
+      postureBtn.textContent = 'posture: tracking';
+      postureBtn.classList.add('active');
+      log('posture tracking active — shoulders/arms');
+    } else {
+      postureMode = 'off';
+      postureBtn.textContent = 'posture: off';
+      log('could not load posture model (likely blocked in this preview) — posture stays off');
+    }
+  } else {
+    postureMode = 'off';
+    postureBtn.textContent = 'posture: off';
+    postureBtn.classList.remove('active');
+    document.getElementById('tPosture').textContent = '—';
+    log('posture tracking turned off');
+  }
+});
+
+function loadScript(src){
+  return new Promise((resolve, reject)=>{
+    const s = document.createElement('script');
+    s.src = src; s.onload = ()=>resolve(); s.onerror = ()=>reject(new Error('failed: '+src));
+    document.head.appendChild(s);
+  });
+}
+
+const withTimeout = (p, ms)=> Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')), ms))]);
+
+async function ensureTfCore(){
+  if(tfCoreLoaded) return;
+  await withTimeout(loadScript('https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.10.0/tf.min.js'), 6000);
+  tfCoreLoaded = true;
+}
+
+async function loadHandTracking(){
+  try{
+    await ensureTfCore();
+    await withTimeout(loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js'), 6000);
+    await withTimeout(loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/hand-pose-detection'), 6000);
+    const model = handPoseDetection.SupportedModels.MediaPipeHands;
+    handDetector = await withTimeout(handPoseDetection.createDetector(model, {
+      runtime:'mediapipe', modelType:'lite',
+      solutionPath:'https://cdn.jsdelivr.net/npm/@mediapipe/hands'
+    }), 8000);
+    return true;
+  }catch(e){
+    handDetector = null;
+    return false;
+  }
+}
+
+async function loadPostureTracking(){
+  try{
+    await ensureTfCore();
+    await withTimeout(loadScript('https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.10.0/tf-backend-webgl.min.js'), 6000).catch(()=>{});
+    await withTimeout(loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection'), 6000);
+    const model = poseDetection.SupportedModels.MoveNet;
+    postureDetector = await withTimeout(poseDetection.createDetector(model, {
+      modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+    }), 8000);
+    baselineShoulderWidth = null;
+    return true;
+  }catch(e){
+    postureDetector = null;
+    return false;
+  }
+}
+
+// ---- demo payload ----
+const gallery = document.getElementById('gallery');
+const listEl = document.getElementById('list');
+const slides = [
+  {label:'01', color:'#2B6CB0'},
+  {label:'02', color:'#2F9E5A'},
+  {label:'03', color:'#C2760C'},
+  {label:'04', color:'#8A5FC2'},
+  {label:'05', color:'#C24F63'},
+];
+let slideIndex = 0;
+slides.forEach((s,i)=>{
+  const el = document.createElement('div');
+  el.className = 'card' + (i===slideIndex?' active':'');
+  el.style.background = s.color;
+  el.textContent = s.label;
+  gallery.appendChild(el);
+});
+function setSlide(i){
+  slideIndex = (i + slides.length) % slides.length;
+  [...gallery.children].forEach((c,idx)=>c.classList.toggle('active', idx===slideIndex));
+}
+function flashSlide(color){
+  const el = gallery.children[slideIndex];
+  if(!el) return;
+  const prevShadow = el.style.boxShadow;
+  el.style.boxShadow = `0 0 0 4px ${color}`;
+  setTimeout(()=>{ el.style.boxShadow = prevShadow; }, 500);
+}
+function runBinding(action, dir){
+  if(action === 'picture') setSlide(slideIndex + dir);
+  else if(action === 'scroll') listEl.scrollTop += dir > 0 ? 40 : -40;
+  else if(action === 'flash') flashSlide(dir > 0 ? '#2F9E5A' : '#C24F63');
+  // 'none' -> no-op
+}
+for(let i=1;i<=10;i++){
+  const row = document.createElement('div');
+  row.textContent = `entry ${String(i).padStart(2,'0')} — sensor log line`;
+  listEl.appendChild(row);
+}
+
+// ---- face + orientation ----
+async function detectFace(){
+  if(!hasFaceDetector) return null;
+  try{
+    const faces = await faceDetector.detect(video);
+    if(faces.length === 0) return null;
+    const b = faces[0].boundingBox;
+    return {x:b.x, y:b.y, w:b.width, h:b.height, cx:b.x+b.width/2, cy:b.y+b.height/2, vw:video.videoWidth, vh:video.videoHeight};
+  }catch(e){ return null; }
+}
+
+function motionPresence(){
+  wctx.drawImage(video, 0, 0, work.width, work.height);
+  const frame = wctx.getImageData(0,0,work.width,work.height);
+  let motionScore = 0;
+  let vec = {dx:0, dy:0};
+  if(prevFrame){
+    let sumW=0,sumX=0,sumY=0;
+    for(let y=0;y<work.height;y+=2){
+      for(let x=0;x<work.width;x+=2){
+        const idx = (y*work.width+x)*4;
+        const diff = Math.abs(frame.data[idx]-prevFrame.data[idx]) + Math.abs(frame.data[idx+1]-prevFrame.data[idx+1]);
+        if(diff > 40){
+          motionScore++;
+          sumW += diff; sumX += diff*x; sumY += diff*y;
+        }
+      }
+    }
+    if(sumW>0){ vec.dx = sumX/sumW - work.width/2; vec.dy = sumY/sumW - work.height/2; }
+  }
+  prevFrame = frame;
+  return {motionScore, vec};
+}
+
+// gesture zone = right 40% of frame
+// ---- conversational engagement / turn-taking ----
+// A cheap, independent whole-frame motion sensor (separate buffer from the
+// gesture zone and face fallback, so it doesn't interfere with either) used
+// purely to judge "is this person still actively moving their hands."
+const turnWork = document.createElement('canvas'); turnWork.width = 80; turnWork.height = 60;
+const turnCtx = turnWork.getContext('2d', {willReadFrequently:true});
+let turnPrevFrame = null;
+function overallActivity(){
+  turnCtx.drawImage(video, 0, 0, turnWork.width, turnWork.height);
+  const frame = turnCtx.getImageData(0, 0, turnWork.width, turnWork.height);
+  let score = 0;
+  if(turnPrevFrame){
+    for(let i=0; i<frame.data.length; i+=16){
+      score += Math.abs(frame.data[i] - turnPrevFrame.data[i]);
+    }
+  }
+  turnPrevFrame = frame;
+  return score;
+}
+
+let turnState = 'complete';
+let lastActivityAt = 0;
+let turnPrevWrist = null;
+const TURN_MOTION_THRESHOLD = 900;
+const TURN_GRACE_MS = 1400; // how long stillness is read as "pausing" before "complete"
+
+function setTurnUI(state){
+  document.querySelectorAll('#turnLadder .rung').forEach(r=>{
+    const lit = r.dataset.turn === state;
+    r.classList.toggle('lit', lit);
+    r.style.background = lit ? (state==='expressing' ? '#2F9E5A' : state==='pausing' ? '#C2760C' : '#8A94A6') : '#fff';
+    r.style.color = lit ? '#fff' : '';
+  });
+}
+setTurnUI('complete');
+
+function updateTurnTaking(engaged, handsResult){
+  if(!engaged){ turnPrevWrist = null; return; }
+  let active = overallActivity() > TURN_MOTION_THRESHOLD;
+  if(handMode === 'real' && handsResult && handsResult.length){
+    const wrist = handsResult[0].keypoints[0];
+    if(turnPrevWrist){
+      const d = Math.hypot(wrist.x - turnPrevWrist.x, wrist.y - turnPrevWrist.y);
+      if(d > 5) active = true;
+    }
+    turnPrevWrist = {x:wrist.x, y:wrist.y};
+  } else {
+    turnPrevWrist = null;
+  }
+
+  const now = Date.now();
+  if(active) lastActivityAt = now;
+  const sinceActivity = now - lastActivityAt;
+
+  let next;
+  if(active) next = 'expressing';
+  else if(sinceActivity < TURN_GRACE_MS) next = 'pausing';
+  else next = 'complete';
+
+  if(next !== turnState){
+    turnState = next;
+    setTurnUI(turnState);
+    window.dispatchEvent(new CustomEvent('lizwi:turn', {detail:{state: turnState}}));
+    if(turnState === 'complete') log('turn complete — hands still for ' + (TURN_GRACE_MS/1000).toFixed(1) + 's+');
+    else if(turnState === 'expressing') log('expressing — hand activity detected');
+  }
+}
+
+function gestureZoneMotion(){
+  const zx0 = Math.floor(work.width*0.6);
+  let cur = {sumW:0,sumX:0,sumY:0,count:0};
+  const frame = wctx.getImageData(zx0,0,work.width-zx0,work.height);
+  if(!gestureZoneMotion.prev){ gestureZoneMotion.prev = frame; return {dx:0,dy:0,mag:0}; }
+  const prev = gestureZoneMotion.prev;
+  let sumW=0,sumX=0,sumY=0;
+  for(let y=0;y<frame.height;y+=2){
+    for(let x=0;x<frame.width;x+=2){
+      const idx=(y*frame.width+x)*4;
+      const diff = Math.abs(frame.data[idx]-prev.data[idx]);
+      if(diff>35){ sumW+=diff; sumX+=diff*x; sumY+=diff*y; }
+    }
+  }
+  gestureZoneMotion.prev = frame;
+  if(sumW===0) return {dx:0,dy:0,mag:0};
+  const cx = sumX/sumW - frame.width/2;
+  const cy = sumY/sumW - frame.height/2;
+  return {dx:cx, dy:cy, mag: sumW};
+}
+
+// ---- sign trainer & transcriber ----
+// A sign is stored as one or more example sequences. Each sequence is a short
+// series of normalized hand-landmark frames (centered on the wrist, scaled by
+// palm size, so it doesn't matter where in frame or how close the hand is).
+let signTemplates = []; // [{label, sequences: [[{x,y}x21, ...], ...]}]
+let isRecordingSign = false;
+let isTranscribing = false;
+let liveBuffer = []; // rolling recent frames for live matching
+let lastMatchLabel = null;
+let lastMatchTime = 0;
+const SIGN_SAMPLE_MS = 130;
+const SIGN_SAMPLES = 14;
+
+function normalizeHand(keypoints){
+  const wrist = keypoints[0];
+  const midMcp = keypoints[9] || keypoints[wrist === keypoints[0] ? 9 : 9];
+  const scale = Math.max(1, Math.hypot(midMcp.x - wrist.x, midMcp.y - wrist.y));
+  return keypoints.map(k => ({x:(k.x - wrist.x)/scale, y:(k.y - wrist.y)/scale}));
+}
+
+function resample(seq, n){
+  if(seq.length === n) return seq;
+  const out = [];
+  for(let i=0;i<n;i++){
+    const idx = Math.min(seq.length-1, Math.round(i * (seq.length-1) / (n-1)));
+    out.push(seq[idx]);
+  }
+  return out;
+}
+
+function seqDistance(a, b){
+  const ra = resample(a, SIGN_SAMPLES), rb = resample(b, SIGN_SAMPLES);
+  let total = 0, count = 0;
+  for(let i=0;i<SIGN_SAMPLES;i++){
+    for(let j=0;j<ra[i].length;j++){
+      total += Math.hypot(ra[i][j].x - rb[i][j].x, ra[i][j].y - rb[i][j].y);
+      count++;
+    }
+  }
+  return total / count;
+}
+
+function renderSignList(){
+  const el = document.getElementById('signList');
+  el.innerHTML = '';
+  if(signTemplates.length === 0){
+    el.innerHTML = '<div class="row" style="border:none;"><span>no signs recorded yet</span><span></span></div>';
+    return;
+  }
+  signTemplates.forEach((t, i)=>{
+    const row = document.createElement('div');
+    row.className = 'row';
+    const tag = t.standard ? ' [standard]' : ' [personal]';
+    row.innerHTML = `<span>${t.label}${tag}</span><span>${t.sequences.length} example(s) &nbsp; <a href="#" data-i="${i}" style="color:var(--control);">delete</a></span>`;
+    row.querySelector('a').addEventListener('click', (e)=>{
+      e.preventDefault();
+      signTemplates.splice(i,1);
+      renderSignList();
+    });
+    el.appendChild(row);
+  });
+}
+renderSignList();
+
+// ---- speech output ----
+let speechEnabled = false;
+let voiceList = [];
+const voiceSelect = document.getElementById('voiceSelect');
+const rateSlider = document.getElementById('rateSlider');
+
+function populateVoices(){
+  voiceList = speechSynthesis.getVoices();
+  if(voiceList.length === 0) return;
+  voiceSelect.innerHTML = '';
+  voiceList.forEach((v,i)=>{
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = v.name + (v.default ? ' (default)' : '');
+    voiceSelect.appendChild(opt);
+  });
+}
+populateVoices();
+if('speechSynthesis' in window){
+  speechSynthesis.onvoiceschanged = populateVoices;
+} else {
+  log('this browser does not support speech synthesis — speech output will not work here');
+}
+
+function speak(text){
+  if(!text || !('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = parseFloat(rateSlider.value);
+  const v = voiceList[parseInt(voiceSelect.value)];
+  if(v) u.voice = v;
+  speechSynthesis.speak(u);
+}
+
+document.getElementById('speakToggle').addEventListener('click', function(){
+  speechEnabled = !speechEnabled;
+  this.textContent = 'speak recognized signs: ' + (speechEnabled ? 'on' : 'off');
+  this.classList.toggle('active', speechEnabled);
+});
+document.getElementById('speakNowBtn').addEventListener('click', ()=>{
+  const txt = document.getElementById('speakText').value.trim();
+  if(txt) speak(txt);
+});
+document.getElementById('speakText').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter'){ const txt = e.target.value.trim(); if(txt) speak(txt); }
+});
+
+function addTranscript(label){
+  const t = document.getElementById('transcript');
+  const row = document.createElement('div');
+  row.textContent = `${new Date().toLocaleTimeString()}  —  ${label}`;
+  t.prepend(row);
+  if(speechEnabled) speak(label);
+}
+
+const recordSignBtn = document.getElementById('recordSignBtn');
+recordSignBtn.addEventListener('click', async ()=>{
+  const label = document.getElementById('signLabel').value.trim();
+  if(!label){ log('type a label before recording a sign'); return; }
+  if(!(handMode === 'real' && handDetector)){ log('enable real hand tracking first (see the "hand" button above)'); return; }
+  if(isRecordingSign) return;
+  isRecordingSign = true;
+  recordSignBtn.textContent = 'recording…';
+  recordSignBtn.classList.add('active');
+  const frames = [];
+  const start = Date.now();
+  while(Date.now() - start < SIGN_SAMPLE_MS * SIGN_SAMPLES){
+    try{
+      const hands = await handDetector.estimateHands(video, {flipHorizontal:false});
+      if(hands.length) frames.push(normalizeHand(hands[0].keypoints));
+    }catch(e){}
+    await new Promise(r=>setTimeout(r, SIGN_SAMPLE_MS));
+  }
+  isRecordingSign = false;
+  recordSignBtn.textContent = 'record sign (2s)';
+  recordSignBtn.classList.remove('active');
+  if(frames.length < 4){
+    log('couldn\'t see a hand clearly enough — try again with your hand in frame');
+    return;
+  }
+  let entry = signTemplates.find(t=>t.label === label);
+  if(!entry){ entry = {label, sequences:[], standard: document.getElementById('signStandard').checked}; signTemplates.push(entry); }
+  entry.sequences.push(frames);
+  renderSignList();
+  log(`recorded example ${entry.sequences.length} for "${label}"`);
+});
+
+const transcribeBtn = document.getElementById('transcribeBtn');
+transcribeBtn.addEventListener('click', ()=>{
+  isTranscribing = !isTranscribing;
+  transcribeBtn.textContent = 'transcribe: ' + (isTranscribing ? 'on' : 'off');
+  transcribeBtn.classList.toggle('active', isTranscribing);
+  liveBuffer = [];
+  log('transcription ' + (isTranscribing ? 'started' : 'stopped'));
+});
+
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(signTemplates)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'lizwi-signs.json';
+  a.click();
+  log('exported ' + signTemplates.length + ' sign(s)');
+});
+document.getElementById('importBtn').addEventListener('click', ()=> document.getElementById('importFile').click());
+document.getElementById('importFile').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const imported = JSON.parse(reader.result);
+      imported.forEach(t=>{
+        const existing = signTemplates.find(s=>s.label===t.label);
+        if(existing) existing.sequences.push(...t.sequences);
+        else signTemplates.push(t);
+      });
+      renderSignList();
+      log('imported signs from file');
+    }catch(err){ log('could not read that file — expected a JSON export from this app'); }
+  };
+  reader.readAsText(file);
+});
+
+let lastSignSampleAt = 0;
+function processSignTranscription(handsResult, engaged){
+  if(!isTranscribing) return;
+  if(handMode !== 'real' || !handDetector){
+    if(Date.now() - lastMatchTime > 4000){ lastMatchTime = Date.now(); log('transcription needs real hand tracking enabled'); }
+    return;
+  }
+  if(!engaged) return;
+  if(Date.now() - lastSignSampleAt < SIGN_SAMPLE_MS) return;
+  lastSignSampleAt = Date.now();
+
+  if(handsResult && handsResult.length){
+    liveBuffer.push(normalizeHand(handsResult[0].keypoints));
+    if(liveBuffer.length > SIGN_SAMPLES) liveBuffer.shift();
+  }
+
+  if(liveBuffer.length < SIGN_SAMPLES || signTemplates.length === 0) return;
+  if(Date.now() - lastMatchTime < 1500) return; // debounce so one sign doesn't spam the transcript
+
+  let best = null, bestDist = Infinity;
+  for(const t of signTemplates){
+    for(const seq of t.sequences){
+      const d = seqDistance(liveBuffer, seq);
+      if(d < bestDist){ bestDist = d; best = t.label; }
+    }
+  }
+  const MATCH_THRESHOLD = 0.55; // tune per-hand; lower = stricter match
+  if(best && bestDist < MATCH_THRESHOLD){
+    if(best !== lastMatchLabel){
+      addTranscript(best);
+      log(`transcribed sign: "${best}" (distance ${bestDist.toFixed(2)})`);
+      lastMatchLabel = best;
+      lastMatchTime = Date.now();
+      liveBuffer = [];
+    } else {
+      lastMatchTime = Date.now(); // still holding the same sign — refresh debounce quietly
+    }
+  } else {
+    lastMatchLabel = null; // hand left the shape, so the same sign can be repeated next time
+  }
+}
+
+let lastTick = 0;
+async function loop(ts){
+  if(!running) return;
+  if(ts - lastTick > 120){
+    lastTick = ts;
+    await tick();
+  }
+  requestAnimationFrame(loop);
+}
+
+// requestAnimationFrame pauses entirely when this tab is hidden — that's the
+// browser's rule, not a choice made here. This keeps sensing alive at a much
+// slower rate while the tab is open but not focused. It cannot and does not
+// keep running once you switch to a different app; the camera itself gets
+// suspended by the OS at that point, on both Android and Linux.
+let bgInterval = null;
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden){
+    if(running && !bgInterval){
+      bgInterval = setInterval(()=>{ if(running) tick(); }, 1000);
+      log('tab backgrounded — sensing continues at ~1x/sec until you switch tabs back or leave the app entirely');
+    }
+  } else if(bgInterval){
+    clearInterval(bgInterval);
+    bgInterval = null;
+    log('tab back in view — resuming normal rate');
+  }
+});
+
+async function tick(){
+  overlay.width = overlay.clientWidth; overlay.height = overlay.clientHeight;
+  ctx.clearRect(0,0,overlay.width,overlay.height);
+
+  const face = await detectFace();
+  let presence = false, engaged = false, orientation = '—', dist = '—';
+
+  if(face){
+    presence = true;
+    const sizeRatio = face.w / face.vw;
+    dist = sizeRatio > 0.28 ? 'near' : sizeRatio > 0.14 ? 'mid' : 'far';
+    const offsetX = Math.abs(face.cx - face.vw/2) / face.vw;
+    orientation = offsetX < 0.18 ? 'facing camera' : (face.cx < face.vw/2 ? 'turned left' : 'turned right');
+    engaged = offsetX < 0.18 && sizeRatio > 0.12;
+
+    // draw box (mirrored coordinates handled by CSS transform)
+    const sx = overlay.width/face.vw, sy = overlay.height/face.vh;
+    ctx.strokeStyle = stateColors[engaged? 'engaged':'present'];
+    ctx.lineWidth = 2;
+    ctx.strokeRect(face.x*sx, face.y*sy, face.w*sx, face.h*sy);
+
+    faceHistory.push({t:Date.now(), cx:face.cx, cy:face.cy});
+    faceHistory = faceHistory.filter(f=>Date.now()-f.t < 2000);
+    lastSizeRatio = sizeRatio;
+
+    if(dist === 'far' && !engaged){
+      document.getElementById('distHint').style.display = 'block';
+    } else {
+      document.getElementById('distHint').style.display = 'none';
+    }
+  } else {
+    const m = motionPresence();
+    presence = m.motionScore > 8;
+    orientation = presence ? 'unresolved (no FaceDetector)' : '—';
+    document.getElementById('distHint').style.display = 'none';
+  }
+
+  document.getElementById('tFace').textContent = face ? 'detected' : (presence ? 'motion only' : 'none');
+  document.getElementById('tDist').textContent = dist;
+  document.getElementById('tOrient').textContent = orientation;
+
+  // nod ("yes") = vertical oscillation of face center; shake ("no") = horizontal oscillation.
+  // Amplitude threshold scales with face size so it's not more sensitive just because you're closer.
+  let nodDetected = false, shakeDetected = false;
+  if(faceHistory.length > 6){
+    const ampThresh = Math.max(1.2, lastSizeRatio * video.videoWidth * 0.01);
+    let vDirs = [], hDirs = [];
+    for(let i=1;i<faceHistory.length;i++){
+      const dv = faceHistory[i].cy - faceHistory[i-1].cy;
+      const dh = faceHistory[i].cx - faceHistory[i-1].cx;
+      if(Math.abs(dv) > ampThresh) vDirs.push(Math.sign(dv));
+      if(Math.abs(dh) > ampThresh) hDirs.push(Math.sign(dh));
+    }
+    let vReversals = 0, hReversals = 0;
+    for(let i=1;i<vDirs.length;i++) if(vDirs[i] !== vDirs[i-1]) vReversals++;
+    for(let i=1;i<hDirs.length;i++) if(hDirs[i] !== hDirs[i-1]) hReversals++;
+    if(vReversals >= 3 && Date.now()-lastNodTime > 1500){
+      nodDetected = true; lastNodTime = Date.now();
+      log('nod detected — read as "yes"');
+      runBinding(bindNod.value, 1);
+    } else if(hReversals >= 3 && Date.now()-lastShakeTime > 1500){
+      shakeDetected = true; lastShakeTime = Date.now();
+      log('head shake detected — read as "no"');
+      runBinding(bindShake.value, -1);
+    }
+  }
+  document.getElementById('tNod').textContent = nodDetected ? 'yes (nod)' : shakeDetected ? 'no (shake)' : (faceHistory.length? 'watching' : '—');
+
+  // adaptive gesture sensitivity: farther away means smaller pixel motion for the same physical
+  // gesture, so the trigger threshold scales down with distance instead of staying fixed
+  const distanceFactor = Math.min(2.5, Math.max(0.5, 0.18 / Math.max(lastSizeRatio, 0.05)));
+  document.getElementById('tSens').textContent = distanceFactor.toFixed(2) + 'x (' + dist + ')';
+
+  // draw gesture zone rectangle
+  const zx = overlay.width*0.6;
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.setLineDash([4,3]);
+  ctx.strokeRect(zx, 0, overlay.width-zx, overlay.height);
+  ctx.setLineDash([]);
+
+  // state machine with hysteresis: a candidate must hold for HOLD_MS before it commits,
+  // so a half-turn of the head or a blink doesn't bounce the ladder around
+  let candidate = 'idle';
+  if(presence) candidate = 'present';
+  if(engaged) candidate = 'engaged';
+  const micGraceActive = Date.now() - micToggleTime < MIC_GRACE_MS;
+  const gestureArmed = engaged && !micOn && !micGraceActive;
+  if(gestureArmed) candidate = 'control';
+
+  if(candidate !== pendingState){ pendingState = candidate; pendingSince = Date.now(); }
+  if(Date.now() - pendingSince >= HOLD_MS){ setState(candidate); }
+
+  // one shared hand-pose read per tick, reused by both the swipe-zone gesture logic
+  // and the sign transcriber below, so we don't call the model twice per frame
+  let handsResult = null;
+  if(handMode === 'real' && handDetector && presence){
+    try{ handsResult = await handDetector.estimateHands(video, {flipHorizontal:false}); }
+    catch(e){ handsResult = null; }
+  }
+
+  if(postureMode === 'real' && postureDetector && presence){
+    try{
+      const poses = await postureDetector.estimatePoses(video);
+      if(poses.length){
+        const kp = {};
+        poses[0].keypoints.forEach(k => kp[k.name] = k);
+        const sx = overlay.width/video.videoWidth, sy = overlay.height/video.videoHeight;
+        ctx.fillStyle = '#8A5FC2';
+        poses[0].keypoints.forEach(k => { if(k.score > 0.3) ctx.fillRect(k.x*sx-2, k.y*sy-2, 4, 4); });
+
+        const notes = [];
+        if(kp.left_shoulder && kp.right_shoulder && kp.left_shoulder.score > 0.3 && kp.right_shoulder.score > 0.3){
+          const tilt = kp.left_shoulder.y - kp.right_shoulder.y;
+          const width = Math.abs(kp.left_shoulder.x - kp.right_shoulder.x);
+          if(!baselineShoulderWidth) baselineShoulderWidth = width;
+          const ratio = width / baselineShoulderWidth;
+          notes.push(Math.abs(tilt) > 15 ? (tilt > 0 ? 'leaning right' : 'leaning left') : 'level');
+          if(ratio > 1.15) notes.push('closer than baseline');
+          else if(ratio < 0.85) notes.push('turned away / farther');
+        }
+        if(kp.left_wrist && kp.left_shoulder && kp.left_wrist.score > 0.3 && kp.left_wrist.y < kp.left_shoulder.y) notes.push('left arm raised');
+        if(kp.right_wrist && kp.right_shoulder && kp.right_wrist.score > 0.3 && kp.right_wrist.y < kp.right_shoulder.y) notes.push('right arm raised');
+        document.getElementById('tPosture').textContent = notes.length ? notes.join(', ') : 'tracking…';
+      } else {
+        document.getElementById('tPosture').textContent = 'no pose detected';
+      }
+    }catch(e){ /* estimation hiccup, skip this frame */ }
+  }
+
+  // gesture processing only when armed — real skeleton tracking if loaded, else motion-zone
+  let gx = 0, gy = 0, gmag = 0, vecLabel = 'disarmed';
+  if(gestureArmed){
+    if(handMode === 'real' && handDetector){
+      if(handsResult && handsResult.length){
+        const tip = handsResult[0].keypoints.find(k=>k.name === 'index_finger_tip') || handsResult[0].keypoints[8];
+        const sx = overlay.width/video.videoWidth, sy = overlay.height/video.videoHeight;
+        ctx.fillStyle = stateColors.control;
+        handsResult[0].keypoints.forEach(k=> ctx.fillRect(k.x*sx-2, k.y*sy-2, 4, 4));
+        if(prevHandPoint){ gx = tip.x - prevHandPoint.x; gy = tip.y - prevHandPoint.y; gmag = Math.hypot(gx,gy) * 200; }
+        prevHandPoint = {x:tip.x, y:tip.y};
+        vecLabel = `dx:${gx.toFixed(1)} dy:${gy.toFixed(1)} (skeleton)`;
+      } else { prevHandPoint = null; }
+    } else {
+      const gz = gestureZoneMotion();
+      gx = gz.dx; gy = gz.dy; gmag = gz.mag;
+      vecLabel = `dx:${gx.toFixed(1)} dy:${gy.toFixed(1)}`;
+      // still visualize the zone box even in real mode fallback
+      const zx = overlay.width*0.6;
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+      ctx.setLineDash([4,3]);
+      ctx.strokeRect(zx, 0, overlay.width-zx, overlay.height);
+      ctx.setLineDash([]);
+    }
+    const threshold = (handMode === 'real' ? 6 : 4000) / distanceFactor;
+    const moveThresh = (handMode==='real' ? 0.01 : 8) / distanceFactor;
+    if(gmag > threshold && Date.now()-lastGestureTime > 700){
+      if(Math.abs(gx) > Math.abs(gy)){
+        if(Math.abs(gx) > moveThresh){
+          runBinding(bindH.value, gx > 0 ? -1 : 1, gx > 0 ? 'down' : 'up'); // reuse dir for list scroll sign too
+          log('swipe ' + (gx>0?'left':'right') + ' — ' + bindH.value);
+          lastGestureTime = Date.now();
+        }
+      } else {
+        if(Math.abs(gy) > moveThresh){
+          runBinding(bindV.value, gy > 0 ? -1 : 1, gy > 0 ? 'down' : 'up');
+          log('swipe ' + (gy>0?'down':'up') + ' — ' + bindV.value);
+          lastGestureTime = Date.now();
+        }
+      }
+    }
+  } else if(handMode === 'motion') {
+    // keep drawing the zone outline even while disarmed, so it's clear where it is
+    const zx = overlay.width*0.6;
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.setLineDash([4,3]);
+    ctx.strokeRect(zx, 0, overlay.width-zx, overlay.height);
+    ctx.setLineDash([]);
+    gestureZoneMotion(); // keep the diff buffer warm so it doesn't jump on re-arm
+  }
+  document.getElementById('tVec').textContent = gestureArmed ? vecLabel : (micGraceActive ? 'disarmed (mic grace)' : 'disarmed');
+
+  // sign trainer / transcriber — independent of the swipe zone, uses the whole hand,
+  // runs whenever a person is engaged and transcription is turned on
+  processSignTranscription(handsResult, engaged);
+  updateTurnTaking(engaged, handsResult);
+}
+
+// PWA: only registers when served over http(s) — service workers cannot run
+// from a bare file:// page. See NATIVE_PACKAGING.md for how to serve/install it.
+if('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>

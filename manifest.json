@@ -1,0 +1,14 @@
+{
+  "name": "Lizwi — Human Communication Intelligence Platform",
+  "short_name": "Lizwi",
+  "description": "A sovereign human communication intelligence platform for sensing, communicating, and understanding voice, language, signs, gestures, expression, and context.",
+  "start_url": "./lizwi.html",
+  "display": "standalone",
+  "background_color": "#07110F",
+  "theme_color": "#0B6B5B",
+  "orientation": "any",
+  "icons": [
+    { "src": "icons/lizwi-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/lizwi-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
