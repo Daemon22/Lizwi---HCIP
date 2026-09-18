@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(new URL('..', import.meta.url).pathname);
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const html = fs.readFileSync(path.join(root, 'lizwi.html'), 'utf8');
 const runtime = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
 assert.ok(runtime, 'embedded runtime script exists');
