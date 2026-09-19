@@ -48,6 +48,14 @@ Lizwi is designed to be explicit about what it knows and what it does not know. 
 
 The application has no backend and processes its active sensing loop in the browser. Camera and microphone access are controlled by the browser’s permission model. A browser tab cannot keep camera access active after the user leaves the browser for another application; that boundary is an operating-system privacy rule.
 
+## Local-first design
+
+This project is intentionally designed to work without depending on a hosted backend or external model service. The base experience is portable, offline-capable, and accessible across different machines and environments.
+
+The app runs in a motion-first local mode with no remote dependency at all. Optional hand and posture tracking remain disabled unless local assets or a trusted local runtime are explicitly provided; the default behavior stays local-first and fail-safe instead of silently reaching out to the internet.
+
+This aligns the repository with the rest of the family of projects: the app remains usable on a workstation, laptop, Android device, or installed local wrapper without needing a cloud service just to run the core experience.
+
 ## Repository contents
 
 | File or directory | Purpose |

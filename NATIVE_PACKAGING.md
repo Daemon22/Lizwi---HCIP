@@ -1,11 +1,13 @@
 # Getting this running as an installed app on Android and Linux
 
 Everything in this file is written so you can copy/paste commands and get
-a real result. The one thing I can't do from where I'm building this is
-run commands that need internet access on your behalf (downloading Node
-packages, Android SDK components, or Rust crates) — that has to happen
-on your machine. Everything else — the app itself, the manifest, the
-service worker — is already done and sitting in this folder.
+a real result without depending on a hosted backend. The app is designed
+to stay local-first and portable. The only thing that may require internet
+on your machine is installing toolchains such as Android SDK components
+or Rust crates, when you choose to package beyond the basic local PWA
+route. The app itself, the manifest, and the service worker are already
+present in this folder and require no online service to run in default
+motion-first mode.
 
 ## Important: `FaceDetector` and Linux
 

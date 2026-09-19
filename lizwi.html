@@ -7,8 +7,6 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0B6B5B">
 <link rel="icon" href="icons/lizwi-icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#DDE1E3;
@@ -330,6 +328,73 @@ const modeLabel = document.getElementById('modeLabel');
 const logEl = document.getElementById('log');
 
 const stateColors = {idle:'#8A94A6', present:'#2B6CB0', engaged:'#2F9E5A', control:'#C2760C'};
+const LOCAL_FIRST_MODE = true;
+const localPerceptionRegistry = new Map();
+const rootScope = typeof window !== 'undefined' ? window : globalThis;
+
+function createLocalPerceptionProvider(config = {}) {
+  if(!config || typeof config !== 'object') return null;
+  const name = typeof config.name === 'string' && config.name.trim() ? config.name.trim() : 'local-provider';
+  const capabilities = Array.isArray(config.capabilities) ? config.capabilities.filter(Boolean) : [];
+  if(capabilities.length === 0) return null;
+
+  const provider = {
+    name,
+    capabilities,
+    available: typeof config.isAvailable === 'function' ? config.isAvailable() : true,
+    initialized: false,
+    async initialize(){
+      if(this.initialized) return true;
+      if(typeof config.initialize === 'function'){
+        const ok = await config.initialize();
+        this.initialized = !!ok;
+        return this.initialized;
+      }
+      this.initialized = true;
+      return true;
+    },
+    async update(payload){
+      if(typeof config.update === 'function') return config.update(payload);
+      return null;
+    },
+    async shutdown(){
+      if(typeof config.shutdown === 'function') await config.shutdown();
+      this.initialized = false;
+    }
+  };
+  return provider;
+}
+
+function registerLocalPerceptionProvider(config) {
+  const provider = createLocalPerceptionProvider(config);
+  if(!provider) return null;
+  localPerceptionRegistry.set(provider.name, provider);
+  return provider;
+}
+
+function getLocalPerceptionProvider(capability) {
+  for(const provider of localPerceptionRegistry.values()){
+    if(provider.capabilities.includes(capability)) return provider;
+  }
+  return null;
+}
+
+rootScope.LizwiLocalPerception = {
+  createLocalPerceptionProvider,
+  registerLocalPerceptionProvider,
+  getLocalPerceptionProvider,
+  localPerceptionRegistry
+};
+
+registerLocalPerceptionProvider({
+  name: 'motion-first',
+  capabilities: ['presence', 'motion', 'gesture', 'turn', 'face'],
+  isAvailable: () => true,
+  initialize: async () => true,
+  update: async () => ({source: 'motion-first'}),
+  shutdown: async () => {}
+});
+
 let currentState = 'idle';
 let micOn = false;
 let micStream = null;
@@ -493,20 +558,28 @@ window.addEventListener('beforeunload', stopResources);
 
 const handBtn = document.getElementById('handBtn');
 handBtn.addEventListener('click', async ()=>{
+  const provider = getLocalPerceptionProvider('hand');
+  if(!provider || !provider.available){
+    handMode = 'motion';
+    handBtn.textContent = 'hand: motion-zone';
+    handBtn.classList.remove('active');
+    log('no local hand perception provider registered; motion-zone sensing remains active');
+    return;
+  }
   if(handMode === 'motion'){
     handMode = 'loading';
-    handBtn.textContent = 'hand: loading model…';
-    log('attempting to load real hand-skeleton tracking (needs external CDN access)');
+    handBtn.textContent = 'hand: loading provider…';
+    log('initializing local hand perception provider');
     const ok = await loadHandTracking();
     if(ok){
       handMode = 'real';
-      handBtn.textContent = 'hand: skeleton tracking';
+      handBtn.textContent = 'hand: provider active';
       handBtn.classList.add('active');
-      log('real hand tracking active — 21-point skeleton');
+      log('local hand provider active');
     } else {
       handMode = 'motion';
       handBtn.textContent = 'hand: motion-zone';
-      log('could not load hand-skeleton model (likely blocked in this preview) — staying on motion-zone');
+      log('local hand provider unavailable; falling back to motion-zone sensing');
     }
   } else {
     handMode = 'motion';
@@ -518,20 +591,29 @@ handBtn.addEventListener('click', async ()=>{
 
 const postureBtn = document.getElementById('postureBtn');
 postureBtn.addEventListener('click', async ()=>{
+  const provider = getLocalPerceptionProvider('posture');
+  if(!provider || !provider.available){
+    postureMode = 'off';
+    postureBtn.textContent = 'posture: off';
+    postureBtn.classList.remove('active');
+    document.getElementById('tPosture').textContent = '—';
+    log('no local posture perception provider registered; posture stays off');
+    return;
+  }
   if(postureMode === 'off'){
     postureMode = 'loading';
-    postureBtn.textContent = 'posture: loading model…';
-    log('attempting to load body-pose tracking (needs external CDN access)');
+    postureBtn.textContent = 'posture: loading provider…';
+    log('initializing local posture perception provider');
     const ok = await loadPostureTracking();
     if(ok){
       postureMode = 'real';
-      postureBtn.textContent = 'posture: tracking';
+      postureBtn.textContent = 'posture: provider active';
       postureBtn.classList.add('active');
-      log('posture tracking active — shoulders/arms');
+      log('local posture provider active');
     } else {
       postureMode = 'off';
       postureBtn.textContent = 'posture: off';
-      log('could not load posture model (likely blocked in this preview) — posture stays off');
+      log('local posture provider unavailable; posture remains off');
     }
   } else {
     postureMode = 'off';
@@ -543,6 +625,9 @@ postureBtn.addEventListener('click', async ()=>{
 });
 
 function loadScript(src){
+  if(LOCAL_FIRST_MODE && /^https?:\/\//.test(src)){
+    return Promise.reject(new Error('local-first mode blocks remote model downloads'));
+  }
   return new Promise((resolve, reject)=>{
     const s = document.createElement('script');
     s.src = src; s.onload = ()=>resolve(); s.onerror = ()=>reject(new Error('failed: '+src));
@@ -553,27 +638,33 @@ function loadScript(src){
 const withTimeout = (p, ms)=> Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')), ms))]);
 
 async function ensureTfCore(){
+  if(LOCAL_FIRST_MODE){
+    log('local-first mode: no vendor runtime is auto-loaded; motion sensing remains active and fully portable');
+    return;
+  }
   if(tfCoreLoaded) return;
-  await withTimeout(loadScript('https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.10.0/tf.min.js'), 6000);
-  tfCoreLoaded = true;
+  return;
 }
 
 async function loadHandTracking(){
+  const provider = getLocalPerceptionProvider('hand');
+  if(!provider || !provider.available){
+    log('local-first mode: no local hand provider registered; motion-zone sensing stays active');
+    return false;
+  }
   if(modelLoadPromise) return modelLoadPromise;
   modelLoadPromise = (async ()=>{
    try{
-    await ensureTfCore();
-    await withTimeout(loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js'), 6000);
-    await withTimeout(loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/hand-pose-detection'), 6000);
-    const model = handPoseDetection.SupportedModels.MediaPipeHands;
-    handDetector = await withTimeout(handPoseDetection.createDetector(model, {
-      runtime:'mediapipe', modelType:'lite',
-      solutionPath:'https://cdn.jsdelivr.net/npm/@mediapipe/hands'
-    }), 8000);
+    const ok = await provider.initialize();
+    if(!ok){
+      handDetector = null;
+      return false;
+    }
+    if(typeof provider.update === 'function') await provider.update({capability:'hand'});
     return true;
    }catch(e){
     handDetector = null;
-    log('hand model failed to load; explicit fallback is motion-zone mode');
+    log('local hand provider failed to initialize; explicit fallback is motion-zone mode');
     return false;
    } finally { modelLoadPromise = null; }
   })();
@@ -581,15 +672,15 @@ async function loadHandTracking(){
 }
 
 async function loadPostureTracking(){
+  const provider = getLocalPerceptionProvider('posture');
+  if(!provider || !provider.available){
+    log('local-first mode: no local posture provider registered; posture remains off');
+    return false;
+  }
   try{
-    await ensureTfCore();
-    await withTimeout(loadScript('https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.10.0/tf-backend-webgl.min.js'), 6000).catch(()=>{});
-    await withTimeout(loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection'), 6000);
-    const model = poseDetection.SupportedModels.MoveNet;
-    postureDetector = await withTimeout(poseDetection.createDetector(model, {
-      modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
-    }), 8000);
-    baselineShoulderWidth = null;
+    const ok = await provider.initialize();
+    if(!ok) return false;
+    if(typeof provider.update === 'function') await provider.update({capability:'posture'});
     return true;
   }catch(e){
     postureDetector = null;
