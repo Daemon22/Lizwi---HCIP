@@ -99,3 +99,16 @@ Lizwi is a sovereign and extensible human-interface foundation. Its purpose is t
 ## License
 
 No license has been declared yet. Add the project’s approved license before external redistribution.
+
+
+## Direct Twin Link: ARA
+
+LIZWI has a direct semantic twin boundary with ARA, independent of DIBAKU.
+
+- LIZWI contributes structured human communication signals.
+- ARA contributes privacy-checked experiential context.
+- The boundary is language- and modality-independent.
+- Raw audio/video, camera frames, screen captures, and raw sign/gesture media never cross the boundary.
+- XNLP remains a language-specific capability within LIZWI rather than defining the platform.
+
+See `docs/ARA_LIZWI_TWIN_LINK.md`, `protocol/ara-lizwi-twin-link.js`, and `protocol/ara-lizwi-twin-link.schema.json`.
