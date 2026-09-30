@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Daemon22/Lizwi---HCIP/blob/main/protocol/ara-lizwi-twin-link.schema.json",
+  "title": "ARA-LIZWI Twin Link Envelope",
+  "type": "object",
+  "required": ["protocol", "version", "message_id", "timestamp", "session_id", "source", "target", "type", "payload"],
+  "properties": {
+    "protocol": { "const": "ara-lizwi-twin-link" },
+    "version": { "const": "1.0" },
+    "message_id": { "type": "string", "minLength": 1 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "session_id": { "type": "string", "minLength": 1 },
+    "source": { "enum": ["ara", "lizwi"] },
+    "target": { "enum": ["ara", "lizwi", "twin-field"] },
+    "type": {
+      "enum": [
+        "ara.context",
+        "lizwi.communication",
+        "twin.ack",
+        "twin.heartbeat",
+        "twin.consent",
+        "twin.session"
+      ]
+    },
+    "payload": { "type": "object" },
+    "privacy": {
+      "type": "object",
+      "properties": {
+        "raw_media": { "const": false },
+        "sensitivity": { "type": "string" },
+        "consent": { "enum": ["granted", "restricted", "denied", "unknown"] }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
