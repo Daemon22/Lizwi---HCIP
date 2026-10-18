@@ -321,7 +321,6 @@
     <div class="note">This works whether or not the camera can see anything — useful as a fallback when a sign isn't recognized, or on its own as a straightforward type-and-speak tool.</div>
   </div>
 
-  <div class="panel" style="margin-top:16px;">
   <div class="panel voice-panel" style="margin-top:16px;">
     <h2>Voice twin — live English conversation</h2>
     <p class="note" style="margin-top:0;">Optional cloud conversation. When connected, your microphone audio goes directly to OpenAI Realtime over WebRTC and is not sent to ARA. Only completed speech transcripts and ARA visual context cross the twins’ browser event bridge. Camera frames, hand landmarks, and sign samples stay in this browser. Disconnecting stops the microphone and closes the session.</p>
@@ -339,6 +338,7 @@
     </div>
   </div>
 
+  <div class="panel" style="margin-top:16px;">
     <h2>Demo payload — driven by gesture, not touch</h2>
     <div class="gallery" id="gallery"></div>
     <div class="list" id="list"></div>
@@ -1018,8 +1018,8 @@ function addTranscript(label){
   row.textContent = `${new Date().toLocaleTimeString()}  —  ${label}`;
   t.prepend(row);
   if(speechEnabled) speak(label);
-  dispatchLizwiCommunication('user', label, 'sign-transcript');
   if(voiceConnected) sendVoiceText('The signer communicated: ' + label, 'sign');
+  else dispatchLizwiCommunication('user', label, 'sign-transcript');
 }
 
 const recordSignBtn = document.getElementById('recordSignBtn');
