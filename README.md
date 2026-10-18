@@ -46,11 +46,11 @@ window.addEventListener('lizwi:turn', (event) => {
 
 Lizwi is designed to be explicit about what it knows and what it does not know. It does not infer emotion from facial appearance. If a person wants the system to communicate “frustrated,” “tired,” or “I need a break,” that expression must be deliberately recorded as a sign or typed message rather than guessed from appearance.
 
-The application has no backend and processes its active sensing loop in the browser. Camera and microphone access are controlled by the browser’s permission model. A browser tab cannot keep camera access active after the user leaves the browser for another application; that boundary is an operating-system privacy rule.
+The visual sensing loop and existing personal sign recognition remain in the browser. Camera access and microphone access are controlled by the browser’s permission model. An optional cloud voice twin is available only after the user checks its cloud-audio consent and supplies the deployment’s voice access code. In that mode, live microphone audio is sent directly from the browser to OpenAI Realtime over WebRTC; ARA camera frames, landmarks, and sign samples are not sent. Completed speech transcripts and explicitly supplied ARA visual context are emitted as text-only `lizwi:communication` events. A browser tab cannot keep camera access active after the user leaves the browser for another application; that boundary is an operating-system privacy rule.
 
 ## Local-first design
 
-This project is intentionally designed to work without depending on a hosted backend or external model service. The base experience is portable, offline-capable, and accessible across different machines and environments.
+This project keeps its base experience local-first, portable, and usable without a hosted model service. The optional voice twin adds a small Vercel Function to mint short-lived cloud session tokens; it is inactive until the user opts in and connects.
 
 The app runs in a motion-first local mode with no remote dependency at all. Optional hand and posture tracking remain disabled unless local assets or a trusted local runtime are explicitly provided; the default behavior stays local-first and fail-safe instead of silently reaching out to the internet.
 
@@ -62,7 +62,8 @@ This aligns the repository with the rest of the family of projects: the app rema
 |---|---|
 | `lizwi.html` | The self-contained Lizwi web application. |
 | `manifest.json` | Progressive Web App metadata and installation configuration. |
-| `service-worker.js` | Offline app-shell caching. |
+| `service-worker.js` | Offline app-shell caching; `/api/` responses are never cached. |
+| `api/realtime-token.mjs` | Same-origin, access-code-gated Vercel Function for short-lived voice session tokens. |
 | `icons/` | PWA icons and the supplied Lizwi brand logo. |
 | `NATIVE_PACKAGING.md` | Guidance for local PWA, Android, and Linux packaging. |
 
@@ -76,14 +77,15 @@ For PWA installation and service-worker behavior, serve the directory over HTTP 
 python3 -m http.server 8080
 ```
 
-Then open `http://localhost:8080/lizwi.html`. The application can also be opened from another device on the same network using the host computer’s local IP address.
+Then open `http://localhost:8080/lizwi.html`. The application can also be opened from another device on the same network using the host computer’s local IP address. The optional cloud voice twin requires a same-origin Vercel deployment and the `OPENAI_API_KEY` and `LIZWI_VOICE_ACCESS_CODE` environment variables. Use a randomly generated access code of at least 24 characters; enter it only when explicitly connecting. The endpoint returns a short-lived session token and never returns the provider API key. Local static serving and GitHub Pages do not provide this endpoint.
 
 ## Verification
 
-Lizwi includes a lightweight Node-based test suite that does not introduce a framework or build step. Run it from the repository root:
+Lizwi includes lightweight Node-based tests that do not introduce a framework or build step. Run it from the repository root:
 
 ```bash
 node tests/lizwi-hardening.test.mjs
+node tests/lizwi-voice.test.mjs
 ```
 
 The suite verifies embedded JavaScript and service-worker syntax, valid and invalid sign imports, exact 21-landmark validation, non-finite coordinate rejection, safe handling of script-like labels, fail-closed sign distance, and the presence of camera, microphone, model-fallback, loop, and shutdown safeguards. Browser and physical-device behavior still requires a real permissioned browser session.
