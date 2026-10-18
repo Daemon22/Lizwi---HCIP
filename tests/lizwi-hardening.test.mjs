@@ -12,7 +12,10 @@ assert.ok(runtime, 'embedded runtime script exists');
 assert.ok(runtime.includes('LOCAL_FIRST_MODE'), 'project stays local-first by default');
 assert.ok(runtime.includes('localPerceptionRegistry'), 'local perception provider registry exists');
 assert.ok(runtime.includes('registerLocalPerceptionProvider'), 'local provider registration exists');
-assert.ok(!runtime.includes('https://') && !runtime.includes('http://'), 'executable runtime does not embed remote URLs');
+assert.ok(runtime.includes("if(!voiceCloudConsent.checked)"), 'cloud voice requires an explicit consent check');
+assert.ok(runtime.includes("fetch('/api/realtime-token'"), 'browser requests a same-origin short-lived token');
+assert.ok(runtime.includes("'user', label, 'sign-transcript'"), 'recognized signs keep flowing through the shared communication event');
+assert.ok(runtime.includes("event.detail?.text"), 'voice twin accepts text-only visual context from ARA');
 new vm.Script(runtime, {filename: 'lizwi.html'});
 new vm.Script(fs.readFileSync(path.join(root, 'service-worker.js'), 'utf8'), {filename: 'service-worker.js'});
 
@@ -78,6 +81,10 @@ for (const required of [
   'validateImportedSigns(data)',
   'window.addEventListener(\'pagehide\', stopResources)',
   'frameRequest = requestAnimationFrame(loop)',
+  'voiceStream.getTracks().forEach(track => track.stop())',
+  'window.addEventListener(\'pagehide\', ()=>stopVoiceSession',
+  'voiceChannel.close()',
 ]) assert.ok(html.includes(required), `lifecycle safeguard: ${required}`);
 
+assert.ok(fs.readFileSync(path.join(root, 'service-worker.js'), 'utf8').includes("pathname.startsWith('/api/')"), 'API responses bypass the cache');
 console.log('Lizwi hardening tests: all passed');

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lizwi-v1';
+const CACHE_NAME = 'lizwi-v2';
 const APP_SHELL = [
   './lizwi.html',
   './manifest.json',
@@ -25,6 +25,8 @@ self.addEventListener('activate', (event) => {
 // Cache-first for the app shell; network-first for everything else (e.g. the
 // optional hand-tracking model files), falling back to cache if offline.
 self.addEventListener('fetch', (event) => {
+  const requestUrl = new URL(event.request.url);
+  if(requestUrl.origin === self.location.origin && requestUrl.pathname.startsWith('/api/')) return;
   const isAppShell = APP_SHELL.some((path) => event.request.url.endsWith(path.replace('./', '')));
   if (isAppShell) {
     event.respondWith(
