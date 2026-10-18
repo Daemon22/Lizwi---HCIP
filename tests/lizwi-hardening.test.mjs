@@ -14,7 +14,7 @@ assert.ok(runtime.includes('localPerceptionRegistry'), 'local perception provide
 assert.ok(runtime.includes('registerLocalPerceptionProvider'), 'local provider registration exists');
 assert.ok(runtime.includes("if(!voiceCloudConsent.checked)"), 'cloud voice requires an explicit consent check');
 assert.ok(runtime.includes("fetch('/api/realtime-token'"), 'browser requests a same-origin short-lived token');
-assert.ok(runtime.includes("label, 'sign-transcript'"), 'recognized signs keep flowing through the shared communication event');
+assert.ok(runtime.includes("'user', label, 'sign-transcript'"), 'recognized signs keep flowing through the shared communication event');
 assert.ok(runtime.includes("event.detail?.text"), 'voice twin accepts text-only visual context from ARA');
 new vm.Script(runtime, {filename: 'lizwi.html'});
 new vm.Script(fs.readFileSync(path.join(root, 'service-worker.js'), 'utf8'), {filename: 'service-worker.js'});
