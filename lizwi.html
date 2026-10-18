@@ -120,6 +120,18 @@
     font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink);
     border:1px solid var(--line);border-radius:3px;background:#fff;padding:3px 6px;
   }
+
+  .voice-panel{border-color:#1e7769;box-shadow:0 10px 32px rgba(7,42,37,.10);}
+  .voice-consent{display:flex;align-items:flex-start;gap:8px;margin:12px 0;font-size:12px;line-height:1.5;color:var(--ink);}
+  .voice-consent input{margin-top:2px;accent-color:#0B6B5B;}
+  .voice-controls{flex-wrap:wrap;}
+  .voice-controls input{font:11px 'IBM Plex Mono',monospace;border:1px solid var(--line);border-radius:20px;padding:7px 11px;flex:1;min-width:170px;}
+  .voice-status{font:11px 'IBM Plex Mono',monospace;color:var(--muted);padding:8px 0;}
+  .voice-transcript{min-height:60px;max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:4px;background:#fff;padding:8px;margin:4px 0;}
+  .voice-line{font-size:12px;line-height:1.45;padding:5px 4px;border-bottom:1px solid #e7eaec;overflow-wrap:anywhere;}
+  .voice-line:last-child{border-bottom:0;}
+  .voice-line strong{color:#0B6B5B;margin-right:6px;}
+
   .note{font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5;}
   .zone-label{position:absolute;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#fff;background:rgba(0,0,0,0.5);padding:2px 5px;border-radius:2px;}
 </style>
@@ -310,6 +322,23 @@
   </div>
 
   <div class="panel" style="margin-top:16px;">
+  <div class="panel voice-panel" style="margin-top:16px;">
+    <h2>Voice twin — live English conversation</h2>
+    <p class="note" style="margin-top:0;">Optional cloud conversation. When connected, your microphone audio goes directly to OpenAI Realtime over WebRTC and is not sent to ARA. Only completed speech transcripts and ARA visual context cross the twins’ browser event bridge. Camera frames, hand landmarks, and sign samples stay in this browser. Disconnecting stops the microphone and closes the session.</p>
+    <label class="voice-consent"><input type="checkbox" id="voiceCloudConsent"> I understand and want to send live microphone audio to the configured cloud voice service while connected.</label>
+    <div class="controls voice-controls">
+      <input id="voiceAccessCode" type="password" autocomplete="current-password" placeholder="Vercel voice access code" aria-label="Vercel voice access code">
+      <button class="pill" id="voiceConnectBtn" type="button">connect voice twin</button>
+      <button class="pill" id="voiceDisconnectBtn" type="button" disabled>disconnect</button>
+    </div>
+    <div class="voice-status" id="voiceStatus" role="status" aria-live="polite">Disconnected — voice is off.</div>
+    <div class="voice-transcript" id="voiceTranscript" aria-live="polite" aria-label="Voice conversation transcript"></div>
+    <div class="controls voice-controls">
+      <input id="voiceTextInput" type="text" placeholder="Type a message to LIZWI" aria-label="Type a message to LIZWI" disabled>
+      <button class="pill" id="voiceTextSend" type="button" disabled>send</button>
+    </div>
+  </div>
+
     <h2>Demo payload — driven by gesture, not touch</h2>
     <div class="gallery" id="gallery"></div>
     <div class="list" id="list"></div>
@@ -494,6 +523,7 @@ function stopCamera(){
 }
 
 function stopResources(){
+  stopVoiceSession('Sensors stopped — voice session disconnected.');
   stopMicrophone();
   stopCamera();
   if(postureDetector?.dispose) postureDetector.dispose();
@@ -988,6 +1018,8 @@ function addTranscript(label){
   row.textContent = `${new Date().toLocaleTimeString()}  —  ${label}`;
   t.prepend(row);
   if(speechEnabled) speak(label);
+  dispatchLizwiCommunication('user', label, 'sign-transcript');
+  if(voiceConnected) sendVoiceText('The signer communicated: ' + label, 'sign');
 }
 
 const recordSignBtn = document.getElementById('recordSignBtn');
@@ -1221,7 +1253,7 @@ async function tick(){
   if(presence) candidate = 'present';
   if(engaged) candidate = 'engaged';
   const micGraceActive = Date.now() - micToggleTime < MIC_GRACE_MS;
-  const gestureArmed = engaged && !micOn && !micGraceActive;
+  const gestureArmed = engaged && !micOn && !voiceConnected && !micGraceActive;
   if(gestureArmed) candidate = 'control';
 
   if(candidate !== pendingState){ pendingState = candidate; pendingSince = Date.now(); }
@@ -1329,6 +1361,194 @@ async function tick(){
   processSignTranscription(handsResult, engaged);
   updateTurnTaking(engaged, handsResult);
 }
+
+
+const voiceCloudConsent = document.getElementById('voiceCloudConsent');
+const voiceAccessCode = document.getElementById('voiceAccessCode');
+const voiceConnectBtn = document.getElementById('voiceConnectBtn');
+const voiceDisconnectBtn = document.getElementById('voiceDisconnectBtn');
+const voiceStatus = document.getElementById('voiceStatus');
+const voiceTranscript = document.getElementById('voiceTranscript');
+const voiceTextInput = document.getElementById('voiceTextInput');
+const voiceTextSend = document.getElementById('voiceTextSend');
+let voicePeer = null;
+let voiceChannel = null;
+let voiceStream = null;
+let voiceConnected = false;
+let voiceTranscriptParts = new Map();
+
+function setVoiceStatus(message){
+  voiceStatus.textContent = message;
+}
+
+function dispatchLizwiCommunication(speaker, text, modality = 'voice'){
+  const cleanText = typeof text === 'string' ? text.trim().slice(0, 2000) : '';
+  if(!cleanText) return;
+  const detail = {source:'LIZWI', speaker, modality, text:cleanText, createdAt:new Date().toISOString()};
+  window.dispatchEvent(new CustomEvent('lizwi:communication', {detail}));
+}
+
+function addVoiceLine(speaker, text){
+  const cleanText = typeof text === 'string' ? text.trim() : '';
+  if(!cleanText) return;
+  const row = document.createElement('div');
+  row.className = 'voice-line';
+  const label = document.createElement('strong');
+  label.textContent = speaker;
+  const body = document.createElement('span');
+  body.textContent = cleanText;
+  row.append(label, body);
+  voiceTranscript.append(row);
+  voiceTranscript.scrollTop = voiceTranscript.scrollHeight;
+  while(voiceTranscript.children.length > 80) voiceTranscript.firstElementChild.remove();
+}
+
+function sendVoiceText(text, source = 'text'){
+  if(!voiceConnected || !voiceChannel || voiceChannel.readyState !== 'open') return false;
+  const cleanText = typeof text === 'string' ? text.trim().slice(0, 2000) : '';
+  if(!cleanText) return false;
+  voiceChannel.send(JSON.stringify({
+    type:'conversation.item.create',
+    item:{type:'message', role:'user', content:[{type:'input_text', text:cleanText}]}
+  }));
+  voiceChannel.send(JSON.stringify({type:'response.create'}));
+  addVoiceLine(source === 'ara' ? 'ARA visual twin' : 'You', cleanText);
+  dispatchLizwiCommunication(source === 'ara' ? 'user' : 'user', cleanText, source === 'ara' ? 'visual-context' : source);
+  return true;
+}
+
+function handleVoiceEvent(event){
+  let data;
+  try{ data = JSON.parse(event.data); }catch(e){ return; }
+  if(data.type === 'conversation.item.input_audio_transcription.completed' && data.transcript){
+    addVoiceLine('You', data.transcript);
+    dispatchLizwiCommunication('user', data.transcript, 'speech-transcript');
+  } else if(data.type === 'response.output_audio_transcript.done' && data.transcript){
+    addVoiceLine('LIZWI', data.transcript);
+    dispatchLizwiCommunication('assistant', data.transcript, 'speech');
+  } else if(data.type === 'response.output_text.done' && data.text){
+    addVoiceLine('LIZWI', data.text);
+    dispatchLizwiCommunication('assistant', data.text, 'text');
+  } else if(data.type === 'error'){
+    setVoiceStatus('Voice service error — ' + (data.error?.message || 'the session could not continue.'));
+  }
+}
+
+function stopVoiceSession(message = 'Disconnected — voice is off.'){
+  voiceConnected = false;
+  if(voiceChannel){ try{ voiceChannel.close(); }catch(e){} voiceChannel = null; }
+  if(voicePeer){ try{ voicePeer.close(); }catch(e){} voicePeer = null; }
+  if(voiceStream){ voiceStream.getTracks().forEach(track => track.stop()); voiceStream = null; }
+  voiceTranscriptParts.clear();
+  micOn = false;
+  micBtn.textContent = 'mic: muted';
+  micBtn.classList.remove('active');
+  document.getElementById('tMic').textContent = 'muted';
+  voiceConnectBtn.disabled = false;
+  voiceDisconnectBtn.disabled = true;
+  voiceTextInput.disabled = true;
+  voiceTextSend.disabled = true;
+  setVoiceStatus(message);
+}
+
+async function startVoiceSession(){
+  if(!voiceCloudConsent.checked){
+    setVoiceStatus('Tick the cloud-audio consent box before connecting.');
+    return;
+  }
+  const accessCode = voiceAccessCode.value.trim();
+  if(!accessCode){
+    setVoiceStatus('Enter the Vercel voice access code to connect.');
+    voiceAccessCode.focus();
+    return;
+  }
+  if(!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection){
+    setVoiceStatus('This browser does not support microphone WebRTC voice sessions.');
+    return;
+  }
+  if(micOn) stopMicrophone();
+  voiceConnectBtn.disabled = true;
+  setVoiceStatus('Requesting a short-lived session token…');
+  try{
+    const tokenResponse = await fetch('/api/realtime-token', {
+      method:'POST',
+      headers:{'x-lizwi-voice-code':accessCode}
+    });
+    const tokenData = await tokenResponse.json().catch(()=>({}));
+    if(!tokenResponse.ok) throw new Error(tokenData.error || 'Voice service is not configured.');
+    const ephemeralKey = tokenData.value || tokenData.client_secret?.value;
+    if(!ephemeralKey) throw new Error('The voice service returned no short-lived session token.');
+
+    voiceStream = await navigator.mediaDevices.getUserMedia({audio:true});
+    voicePeer = new RTCPeerConnection();
+    voiceChannel = voicePeer.createDataChannel('oai-events');
+    voiceChannel.addEventListener('message', handleVoiceEvent);
+    voiceChannel.addEventListener('open', ()=>{
+      voiceConnected = true;
+      micOn = true;
+      micBtn.textContent = 'mic: live (cloud conversation)';
+      micBtn.classList.add('active');
+      document.getElementById('tMic').textContent = 'live (cloud)';
+      voiceDisconnectBtn.disabled = false;
+      voiceTextInput.disabled = false;
+      voiceTextSend.disabled = false;
+      setVoiceStatus('Connected — English speech and live replies are on. Audio is sent to the configured cloud service.');
+    });
+    voicePeer.addEventListener('track', event=>{
+      const output = new Audio();
+      output.autoplay = true;
+      output.srcObject = event.streams[0];
+      output.play().catch(()=>setVoiceStatus('Connected — allow audio playback in this browser to hear LIZWI.'));
+    });
+    voicePeer.addEventListener('connectionstatechange', ()=>{
+      if(voicePeer && voicePeer.connectionState === 'failed') stopVoiceSession('Connection failed. Reconnect when ready.');
+    });
+    voiceStream.getTracks().forEach(track => voicePeer.addTrack(track, voiceStream));
+    const offer = await voicePeer.createOffer();
+    await voicePeer.setLocalDescription(offer);
+    const answerResponse = await fetch('https://api.openai.com/v1/realtime/calls', {
+      method:'POST',
+      headers:{Authorization:'Bearer ' + ephemeralKey, 'Content-Type':'application/sdp'},
+      body:offer.sdp
+    });
+    if(!answerResponse.ok) throw new Error('The cloud voice session could not be established.');
+    await voicePeer.setRemoteDescription({type:'answer', sdp:await answerResponse.text()});
+    voiceAccessCode.value = '';
+  }catch(error){
+    stopVoiceSession(error?.message || 'Could not connect. Check the deployment and microphone permission.');
+  }
+}
+
+voiceConnectBtn.addEventListener('click', startVoiceSession);
+voiceDisconnectBtn.addEventListener('click', ()=>stopVoiceSession());
+micBtn.addEventListener('click', event=>{
+  if(voiceConnected){
+    event.stopImmediatePropagation();
+    stopVoiceSession();
+    log('cloud voice disconnected — microphone tracks stopped');
+  }
+}, true);
+voiceTextSend.addEventListener('click', ()=>{
+  if(sendVoiceText(voiceTextInput.value, 'text')) voiceTextInput.value = '';
+});
+voiceTextInput.addEventListener('keydown', event=>{
+  if(event.key === 'Enter'){
+    event.preventDefault();
+    if(sendVoiceText(voiceTextInput.value, 'text')) voiceTextInput.value = '';
+  }
+});
+
+window.LizwiVoice = {
+  isConnected:()=>voiceConnected,
+  sendText:text=>sendVoiceText(text, 'text'),
+  sendVisualContext:text=>sendVoiceText(text, 'ara')
+};
+window.addEventListener('ara:visual-context', event=>{
+  const text = event.detail?.text;
+  if(typeof text === 'string' && text.trim()) sendVoiceText('Visual context from ARA: ' + text.trim(), 'ara');
+});
+window.addEventListener('pagehide', ()=>stopVoiceSession('Page closed — voice session stopped.'));
+
 
 // PWA: only registers when served over http(s) — service workers cannot run
 // from a bare file:// page. See NATIVE_PACKAGING.md for how to serve/install it.
